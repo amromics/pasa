@@ -1,4 +1,2 @@
-# Using genome graph for AMR
-
-A simple genome graph implementation for AMRomics.
-
+# genome-graph
+Graph presentation of bacterial genomes
