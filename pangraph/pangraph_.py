@@ -18,6 +18,8 @@ class PanGraph():
         self.n_clusters = len(self.gene_info.index)
         for i in range(self.n_clusters):
             self.gene2cluster_dict[self.gene_info.iloc[i,0]] = self.gene_info.iloc[i, 2]
+        self.head_contig = {} # the first gene in the contig
+        self.tail_contig = {} # the last gene in the contig
 
     def map_edge_fn(self, i, j, N = 10000431):
         # map an edge (i, j) to a number.
@@ -150,6 +152,11 @@ class PanGraph():
             ### Add contig ID
             for gene in gene_contigs:
                 self.gene2contigs_dict[gene] = i
+            ### Add head and tail of contig
+            contigname_ = self.gene_position.iloc[i,1]
+            self.head_contig[contigname_] = self.gene2cluster_dict[gene_contigs[0]]
+            self.tail_contig[contigname_] = self.gene2cluster_dict[gene_contigs[-1]]
+            
         print("Set minimum on len of contigs = ", min_contig_len, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
         # adj_matrix = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(self.n_clusters, self.n_clusters)).toarray()
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
@@ -162,3 +169,50 @@ class PanGraph():
         mapping = {i: "C-" + str(i) for i in range(self.n_clusters)}
         self.H = nx.relabel_nodes(self.H, mapping)
         return self.H
+
+    
+    def join_contig(self, sample_id):
+        """Join contigs using pangenome graph.
+        Parameters
+        ----------
+        sample_id : integer
+            The sample ID (same as in gene_position) we want to join contigs
+        Returns
+        -------
+        H : networkx graph
+            The pangenome graph
+        """
+        
+        self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==sample_id]
+        source_vec = []
+        target_vec = []
+        weight_vec = []
+        for i in range(len(self.sample_df.index)):
+            for j in range(len(self.sample_df.index)):
+                if i != j:
+                    source_id = 'C-' + str(self.tail_contig[self.sample_df.iloc[i,1]])
+                    target_id = 'C-' + str(self.head_contig[self.sample_df.iloc[j,1]])
+                    if self.H.has_edge(source_id, target_id):
+                        source_vec.append(self.sample_df.iloc[i,1])
+                        target_vec.append(self.sample_df.iloc[j,1])
+                        weight_vec.append(self.H[source_id][target_id]['weight'])
+
+        edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
+        self.edge_df0 = edge_df
+        edge_df = edge_df.sort_values(by='weight', ascending=False)
+        self.edge_list = []
+        count = 0
+        while(len(edge_df.index) > 0):
+            count += 1
+            source_sol_temp = edge_df.iloc[0,0]
+            target_sol_temp = edge_df.iloc[0,1]
+            self.edge_list.append([source_sol_temp, target_sol_temp])
+            edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
+            edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
+            if count > 2000:
+                break
+        
+        self.contig_graph = nx.DiGraph()
+        self.contig_graph.add_edges_from(self.edge_list)
+        
+        return self.contig_graph
