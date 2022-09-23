@@ -209,7 +209,7 @@ class PanGraph():
             self.edge_list.append([source_sol_temp, target_sol_temp])
             edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
             edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
-            if count > 2000:
+            if count > 2000000:
                 break
         
         self.contig_graph = nx.DiGraph()
