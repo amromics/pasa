@@ -4,7 +4,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import math
-
+    
 class PanGraph():
     def __init__(self, sample_info, gene_info, gene_position, grades=None):
         # input paramters
@@ -23,9 +23,18 @@ class PanGraph():
 
     def map_edge_fn(self, i, j, N = 10000431):
         # map an edge (i, j) to a number.
-        return(i*N + j)   
+        return(i*N + j) 
+    
+    def compute_number_nucleotides(self, gene_contigs = None):
+        # compute number of nucleotides in the contig
+        n_nucleo = 0
+        for gene in gene_contigs:
+            gc = gene.split("@")
+            n_nucleo += int(gc[-2])
+        return (n_nucleo) 
+    
 
-    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_contig_len = 100, edge_weight = "unit"):
+    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 3, edge_weight = "unit"):
         """Construct pangenome graph.
         Parameters
         ----------
@@ -72,7 +81,7 @@ class PanGraph():
 
         for i in range(n_contigs):
             gene_contigs = self.gene_position.iloc[i,2].split(";")
-            if len(gene_contigs) >= min_contig_len:
+            if self.compute_number_nucleotides(gene_contigs) >= min_nucleotides and len(gene_contigs) >= min_genes:
                 n_computed_contig = n_computed_contig + 1
                 ### align to reference
                 if method=="graph_alignment":
@@ -83,8 +92,8 @@ class PanGraph():
                         gene_contigs.reverse()
                         edge_id2 = set([self.map_edge_fn(self.gene2cluster_dict[gene_contigs[i]], self.gene2cluster_dict[gene_contigs[i+1]]) for i in range(len(gene_contigs)-1)])
                         n2_value = len(edge_id_ref.intersection(edge_id2))
-                        if min(n1_value, n2_value) > 3:
-                            print("ContigID: ", i, ", Contig Length: ", len(gene_contigs),", sample:",self.gene_position.iloc[i,0], ", # of shared edges: ", n1_value, n2_value)
+                        # if min(n1_value, n2_value) > 3:
+                        #     print("ContigID: ", i, ", Contig Length: ", len(gene_contigs),", sample:",self.gene_position.iloc[i,0], ", # of shared edges: ", n1_value, n2_value)
                         if n2_value < n1_value:
                             gene_contigs.reverse()
                             edge_id_ref = edge_id_ref.union(edge_id1)
@@ -157,7 +166,7 @@ class PanGraph():
             self.head_contig[contigname_] = self.gene2cluster_dict[gene_contigs[0]]
             self.tail_contig[contigname_] = self.gene2cluster_dict[gene_contigs[-1]]
             
-        print("Set minimum on len of contigs = ", min_contig_len, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
+        print("Set minimum on number of nucleotides = ", min_nucleotides, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
         # adj_matrix = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(self.n_clusters, self.n_clusters)).toarray()
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
         
@@ -171,7 +180,7 @@ class PanGraph():
         return self.H
 
     
-    def join_contig(self, sample_id):
+    def join_contig(self, sample_id, min_weight=1):
         """Join contigs using pangenome graph.
         Parameters
         ----------
@@ -206,10 +215,13 @@ class PanGraph():
             count += 1
             source_sol_temp = edge_df.iloc[0,0]
             target_sol_temp = edge_df.iloc[0,1]
-            self.edge_list.append([source_sol_temp, target_sol_temp])
-            edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
-            edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
-            if count > 2000000:
+            if edge_df.iloc[0,2] >= min_weight:
+                self.edge_list.append([source_sol_temp, target_sol_temp])
+                edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
+                edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
+                if count > 2000000:
+                    break
+            else:
                 break
         
         self.contig_graph = nx.DiGraph()
