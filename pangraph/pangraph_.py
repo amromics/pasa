@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import math
+from networkx import NetworkXNoPath
     
 class PanGraph():
     def __init__(self, sample_info, gene_info, gene_position, grades=None):
@@ -11,6 +12,7 @@ class PanGraph():
         self.sample_info = sample_info
         self.gene_info = gene_info
         self.gene_position = gene_position
+        self.strand = {}
         # self.grades = grades or {}
        
         # computed parameters
@@ -97,9 +99,11 @@ class PanGraph():
                         if n2_value < n1_value:
                             gene_contigs.reverse()
                             edge_id_ref = edge_id_ref.union(edge_id1)
+                            self.strand[self.gene_position.iloc[i,1]] = '+'
                         else:
                             # print("Reverse the sequence: ", i)
                             edge_id_ref = edge_id_ref.union(edge_id2)
+                            self.strand[self.gene_position.iloc[i,1]] = '-'
                 elif method=="graph_free":
                      ### free alignment
                     ref_id = 0
@@ -180,7 +184,7 @@ class PanGraph():
         return self.H
 
     
-    def join_contig(self, sample_id, min_weight=1):
+    def join_contig(self, sample_id, min_weight=1, method ="edge_weight"):
         """Join contigs using pangenome graph.
         Parameters
         ----------
@@ -200,12 +204,29 @@ class PanGraph():
             for j in range(len(self.sample_df.index)):
                 if i != j:
                     source_id = 'C-' + str(self.tail_contig[self.sample_df.iloc[i,1]])
-                    target_id = 'C-' + str(self.head_contig[self.sample_df.iloc[j,1]])
-                    if self.H.has_edge(source_id, target_id):
-                        source_vec.append(self.sample_df.iloc[i,1])
-                        target_vec.append(self.sample_df.iloc[j,1])
-                        weight_vec.append(self.H[source_id][target_id]['weight'])
-
+                    target_id = 'C-' + str(self.head_contig[self.sample_df.iloc[j,1]])     
+                    if method == "edge_weight":
+                        if self.H.has_edge(source_id, target_id): 
+                            source_vec.append(self.sample_df.iloc[i,1])
+                            target_vec.append(self.sample_df.iloc[j,1])
+                            weight_vec.append(self.H[source_id][target_id]['weight'])
+                    else:
+                        ### method = weight_path
+                        try:
+                            p = nx.shortest_path(self.H, source=source_id, target=target_id)
+                        except NetworkXNoPath:
+                            p = None
+                        if p is not None:
+                            weight_p = 0.0
+                            for node_p_idx in range(len(p)-1):
+                                weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                            source_vec.append(self.sample_df.iloc[i,1])
+                            target_vec.append(self.sample_df.iloc[j,1])
+                            weight_p = 1.0 + weight_p/float(len(p)*(len(p)-1))
+                            weight_vec.append(weight_p)
+                            print("W:", weight_p, end=",")
+                                
+           
         edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
         self.edge_df0 = edge_df
         edge_df = edge_df.sort_values(by='weight', ascending=False)
