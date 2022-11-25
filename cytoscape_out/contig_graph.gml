@@ -2,207 +2,227 @@ graph [
   directed 1
   node [
     id 0
-    label "NODE_2_length_327037_cov_9.679695"
+    label "NODE_35_length_37130_cov_28.820904"
   ]
   node [
     id 1
-    label "NODE_48_length_26212_cov_9.866692"
+    label "NODE_13_length_168667_cov_28.976289"
   ]
   node [
     id 2
-    label "NODE_4_length_232574_cov_9.604416"
+    label "NODE_38_length_34591_cov_29.131081"
   ]
   node [
     id 3
-    label "NODE_70_length_1645_cov_54.421556"
+    label "NODE_19_length_94554_cov_29.156891"
   ]
   node [
     id 4
-    label "NODE_63_length_2974_cov_10.190542"
+    label "NODE_2_length_329613_cov_29.003972"
   ]
   node [
     id 5
-    label "NODE_10_length_172442_cov_9.795933"
+    label "NODE_11_length_172364_cov_28.775758"
   ]
   node [
     id 6
-    label "NODE_61_length_6024_cov_10.046914"
+    label "NODE_22_length_76367_cov_29.127935"
   ]
   node [
     id 7
-    label "NODE_3_length_270336_cov_9.761447"
+    label "NODE_14_length_141057_cov_29.055971"
   ]
   node [
     id 8
-    label "NODE_59_length_11110_cov_10.111212"
+    label "NODE_33_length_53139_cov_28.764901"
   ]
   node [
     id 9
-    label "NODE_56_length_15909_cov_9.153297"
+    label "NODE_27_length_62428_cov_28.863114"
   ]
   node [
     id 10
-    label "NODE_47_length_30109_cov_10.015250"
+    label "NODE_29_length_59401_cov_29.119064"
   ]
   node [
     id 11
-    label "NODE_53_length_20146_cov_9.388908"
+    label "NODE_28_length_59440_cov_29.022935"
   ]
   node [
     id 12
-    label "NODE_20_length_84618_cov_9.641026"
+    label "NODE_30_length_58501_cov_29.181877"
   ]
   node [
     id 13
-    label "NODE_54_length_17251_cov_9.539245"
+    label "NODE_43_length_15893_cov_28.404849"
   ]
   node [
     id 14
-    label "NODE_32_length_58833_cov_9.739193"
+    label "NODE_18_length_99322_cov_28.972146"
   ]
   node [
     id 15
-    label "NODE_49_length_24998_cov_9.486016"
+    label "NODE_39_length_34017_cov_29.673488"
   ]
   node [
     id 16
-    label "NODE_9_length_178806_cov_9.823929"
+    label "NODE_4_length_271633_cov_29.134249"
   ]
   node [
     id 17
-    label "NODE_28_length_69350_cov_9.702063"
+    label "NODE_42_length_22833_cov_28.719598"
   ]
   node [
     id 18
-    label "NODE_44_length_34028_cov_10.186887"
+    label "NODE_36_length_36095_cov_28.964179"
   ]
   node [
     id 19
-    label "NODE_17_length_95330_cov_9.519595"
+    label "NODE_25_length_72877_cov_28.813875"
   ]
   node [
     id 20
-    label "NODE_43_length_34423_cov_9.752082"
+    label "NODE_31_length_57071_cov_29.253631"
   ]
   node [
     id 21
-    label "NODE_14_length_129409_cov_9.675424"
+    label "NODE_10_length_181214_cov_29.094414"
   ]
   node [
     id 22
-    label "NODE_36_length_53383_cov_9.616966"
+    label "NODE_1_length_433075_cov_29.110519"
   ]
   node [
     id 23
-    label "NODE_15_length_117021_cov_9.593267"
+    label "NODE_8_length_219879_cov_28.942718"
   ]
   node [
     id 24
-    label "NODE_31_length_59606_cov_9.576055"
+    label "NODE_37_length_34951_cov_29.275476"
   ]
   node [
     id 25
-    label "NODE_35_length_57882_cov_9.856258"
+    label "NODE_17_length_117530_cov_28.742005"
   ]
   node [
     id 26
-    label "NODE_60_length_9279_cov_9.678983"
+    label "NODE_23_length_74418_cov_29.030876"
   ]
   node [
     id 27
-    label "NODE_19_length_86979_cov_9.862615"
+    label "NODE_46_length_11664_cov_28.707296"
   ]
   node [
     id 28
-    label "NODE_23_length_73071_cov_9.690344"
+    label "NODE_32_length_56762_cov_28.935370"
   ]
   node [
     id 29
-    label "NODE_33_length_58682_cov_9.780497"
+    label "NODE_5_length_271365_cov_29.017799"
   ]
   node [
     id 30
-    label "NODE_25_length_72920_cov_9.686833"
+    label "NODE_16_length_129426_cov_29.060833"
   ]
   node [
     id 31
-    label "NODE_34_length_58032_cov_9.615288"
+    label "NODE_40_length_31762_cov_28.797963"
   ]
   node [
     id 32
-    label "NODE_27_length_72291_cov_9.868516"
+    label "NODE_15_length_131761_cov_29.024479"
   ]
   node [
     id 33
-    label "NODE_50_length_23111_cov_10.010289"
+    label "NODE_12_length_171107_cov_29.128698"
   ]
   node [
     id 34
-    label "NODE_62_length_4411_cov_9.557914"
+    label "NODE_45_length_13325_cov_30.337076"
   ]
   node [
     id 35
-    label "NODE_7_length_187242_cov_9.772831"
+    label "NODE_6_length_232748_cov_28.833480"
   ]
   node [
     id 36
-    label "NODE_18_length_93563_cov_9.900220"
+    label "NODE_44_length_14237_cov_28.266747"
   ]
   node [
     id 37
-    label "NODE_41_length_36269_cov_9.752349"
+    label "NODE_9_length_214334_cov_29.017113"
   ]
   node [
     id 38
-    label "NODE_16_length_109994_cov_9.802287"
+    label "NODE_3_length_326830_cov_28.697810"
   ]
   node [
     id 39
-    label "NODE_52_length_22238_cov_9.827129"
+    label "NODE_47_length_5982_cov_28.876497"
   ]
   node [
     id 40
-    label "NODE_71_length_1445_cov_59.191520"
+    label "NODE_56_length_1008_cov_29.315845"
   ]
   node [
     id 41
-    label "NODE_13_length_131730_cov_9.796404"
+    label "NODE_7_length_230874_cov_29.094048"
   ]
   node [
     id 42
-    label "NODE_37_length_53262_cov_9.677014"
+    label "NODE_34_length_39831_cov_29.429178"
   ]
   node [
     id 43
-    label "NODE_12_length_153018_cov_9.627713"
+    label "NODE_20_length_86454_cov_29.090302"
   ]
   node [
     id 44
-    label "NODE_55_length_16449_cov_9.823540"
+    label "NODE_26_length_69810_cov_28.810953"
   ]
   node [
     id 45
-    label "NODE_51_length_22877_cov_9.629518"
+    label "NODE_54_length_1057_cov_204.308383"
   ]
   node [
     id 46
-    label "NODE_5_length_216832_cov_9.725077"
+    label "NODE_24_length_72976_cov_29.006294"
   ]
   node [
     id 47
-    label "NODE_11_length_169213_cov_9.713278"
+    label "NODE_63_length_355_cov_30.146667"
   ]
   node [
     id 48
-    label "NODE_68_length_1816_cov_10.775158"
+    label "NODE_48_length_4893_cov_30.466515"
+  ]
+  node [
+    id 49
+    label "NODE_41_length_31236_cov_28.855713"
+  ]
+  node [
+    id 50
+    label "NODE_21_length_77831_cov_28.913405"
+  ]
+  node [
+    id 51
+    label "NODE_50_length_1914_cov_141.781065"
   ]
   edge [
     source 0
     target 1
   ]
   edge [
+    source 1
+    target 37
+  ]
+  edge [
     source 2
     target 3
+  ]
+  edge [
+    source 3
+    target 6
   ]
   edge [
     source 4
@@ -210,23 +230,27 @@ graph [
   ]
   edge [
     source 5
-    target 45
+    target 17
   ]
   edge [
     source 6
     target 7
   ]
   edge [
+    source 7
+    target 8
+  ]
+  edge [
     source 8
-    target 2
+    target 9
   ]
   edge [
     source 9
-    target 10
+    target 31
   ]
   edge [
     source 10
-    target 17
+    target 2
   ]
   edge [
     source 11
@@ -234,7 +258,7 @@ graph [
   ]
   edge [
     source 12
-    target 35
+    target 34
   ]
   edge [
     source 13
@@ -242,7 +266,7 @@ graph [
   ]
   edge [
     source 14
-    target 26
+    target 0
   ]
   edge [
     source 15
@@ -250,78 +274,126 @@ graph [
   ]
   edge [
     source 17
-    target 27
+    target 46
   ]
   edge [
     source 18
-    target 19
+    target 11
   ]
   edge [
     source 19
-    target 36
+    target 20
   ]
   edge [
     source 20
-    target 21
-  ]
-  edge [
-    source 21
-    target 40
-  ]
-  edge [
-    source 22
-    target 23
-  ]
-  edge [
-    source 23
-    target 39
-  ]
-  edge [
-    source 24
-    target 25
-  ]
-  edge [
-    source 27
-    target 34
-  ]
-  edge [
-    source 28
     target 29
   ]
   edge [
-    source 30
-    target 31
+    source 21
+    target 13
   ]
   edge [
-    source 32
-    target 33
+    source 22
+    target 19
   ]
   edge [
-    source 36
-    target 37
+    source 23
+    target 24
   ]
   edge [
-    source 38
-    target 4
+    source 24
+    target 39
   ]
   edge [
-    source 40
-    target 22
+    source 25
+    target 26
   ]
   edge [
-    source 41
+    source 26
+    target 40
+  ]
+  edge [
+    source 27
+    target 28
+  ]
+  edge [
+    source 28
     target 42
   ]
   edge [
-    source 43
-    target 44
+    source 29
+    target 4
   ]
   edge [
-    source 46
+    source 30
+    target 25
+  ]
+  edge [
+    source 31
+    target 33
+  ]
+  edge [
+    source 32
+    target 27
+  ]
+  edge [
+    source 33
+    target 36
+  ]
+  edge [
+    source 34
+    target 35
+  ]
+  edge [
+    source 35
+    target 32
+  ]
+  edge [
+    source 37
     target 38
   ]
   edge [
+    source 39
+    target 10
+  ]
+  edge [
+    source 40
+    target 41
+  ]
+  edge [
+    source 42
+    target 22
+  ]
+  edge [
+    source 43
+    target 30
+  ]
+  edge [
+    source 44
+    target 45
+  ]
+  edge [
+    source 45
+    target 18
+  ]
+  edge [
+    source 46
+    target 47
+  ]
+  edge [
     source 47
-    target 48
+    target 23
+  ]
+  edge [
+    source 48
+    target 49
+  ]
+  edge [
+    source 50
+    target 51
+  ]
+  edge [
+    source 51
+    target 44
   ]
 ]

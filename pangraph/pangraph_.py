@@ -36,7 +36,7 @@ class PanGraph():
         return (n_nucleo) 
     
 
-    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 3, edge_weight = "unit"):
+    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit"):
         """Construct pangenome graph.
         Parameters
         ----------
@@ -184,7 +184,7 @@ class PanGraph():
         return self.H
 
     
-    def join_contig(self, sample_id, min_weight=1, method ="edge_weight"):
+    def join_contig(self, sample_id, min_weight=1, method ="edge_weight", params = None):
         """Join contigs using pangenome graph.
         Parameters
         ----------
@@ -202,16 +202,21 @@ class PanGraph():
         weight_vec = []
         for i in range(len(self.sample_df.index)):
             for j in range(len(self.sample_df.index)):
+                if params['graph']=='directed':
+                    source_node = self.sample_df.iloc[i,1]+self.strand[self.sample_df.iloc[i,1]]
+                    target_node = self.sample_df.iloc[j,1]+self.strand[self.sample_df.iloc[j,1]]
+                else:
+                    source_node = self.sample_df.iloc[i,1]
+                    target_node = self.sample_df.iloc[j,1]
                 if i != j:
                     source_id = 'C-' + str(self.tail_contig[self.sample_df.iloc[i,1]])
                     target_id = 'C-' + str(self.head_contig[self.sample_df.iloc[j,1]])     
-                    if method == "edge_weight":
+                    if params['method'] == "edge_weight":
                         if self.H.has_edge(source_id, target_id): 
                             source_vec.append(self.sample_df.iloc[i,1])
                             target_vec.append(self.sample_df.iloc[j,1])
                             weight_vec.append(self.H[source_id][target_id]['weight'])
-                    else:
-                        ### method = weight_path
+                    elif params['method']=="weight_path":
                         try:
                             p = nx.shortest_path(self.H, source=source_id, target=target_id)
                         except NetworkXNoPath:
@@ -224,28 +229,122 @@ class PanGraph():
                             target_vec.append(self.sample_df.iloc[j,1])
                             weight_p = 1.0 + weight_p/float(len(p)*(len(p)-1))
                             weight_vec.append(weight_p)
-                            print("W:", weight_p, end=",")
+                            # print("W:", weight_p, end=",")
+                    elif params['method']=="weight_path_assembly":
+                        assembly_graph = params['assembly_graph']
+                        ### only add the edge in the assembly graph
+                        # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
+                        if assembly_graph.has_node(source_node) and assembly_graph.has_node(target_node):
+                            try:
+                                path = nx.shortest_path(assembly_graph, source=source_node, target=target_node)
+                            except NetworkXNoPath:
+                                path = None
+                            if path is not None and len(path) <= params['max_length']:
+                                # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
+                                try:
+                                    p = nx.shortest_path(self.H, source=source_id, target=target_id)
+                                except NetworkXNoPath:
+                                    p = None
+                                if p is not None:
+                                    # weight_p = self.H[p[0]][p[1]]['weight']
+                                    # for node_p_idx in range(1, len(p)-1):
+                                    #     weight_p = min(weight_p, self.H[p[node_p_idx]][p[node_p_idx+1]]['weight'])
+                                    # weight_p = weight_p * len(p) 
+                                    weight_p = 0.0
+                                    for node_p_idx in range(len(p)-1):
+                                        weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                                    source_vec.append(self.sample_df.iloc[i,1])
+                                    target_vec.append(self.sample_df.iloc[j,1])
+                                    weight_p = 0.05 + weight_p/float(len(p)*(len(p)-1)) # 1.0 + ...
+                                    weight_vec.append(weight_p)
+                                    # print("W:", weight_p, end=",")
+                    
+                    elif params['method']=="weight_path_assembly_v2":
+                        ### only add the edge in the assembly graph
+                        assembly_graph = params['assembly_graph']
+                        # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
+                        # source_node = self.sample_df.iloc[i,1]+self.strand[self.sample_df.iloc[i,1]]
+                        # target_node = self.sample_df.iloc[j,1]+self.strand[self.sample_df.iloc[j,1]]
+                        path_len = 0
+                        if assembly_graph.has_node(source_node) and assembly_graph.has_node(target_node):
+                            try:
+                                path = nx.shortest_path(assembly_graph, source=source_node, target=target_node)
+                                path_len = len(path)
+                            except NetworkXNoPath:
+                                path = None
                                 
+                        if path_len <= params['max_length']:
+                            # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
+                            try:
+                                p = nx.shortest_path(self.H, source=source_id, target=target_id)
+                            except NetworkXNoPath:
+                                p = None
+                            if p is not None:
+                                # weight_p = self.H[p[0]][p[1]]['weight']
+                                # for node_p_idx in range(1, len(p)-1):
+                                #     weight_p = min(weight_p, self.H[p[node_p_idx]][p[node_p_idx+1]]['weight'])
+                                # weight_p = weight_p * len(p)                                
+                                weight_p = 0.0
+                                for node_p_idx in range(len(p)-1):
+                                    weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                                source_vec.append(self.sample_df.iloc[i,1])
+                                target_vec.append(self.sample_df.iloc[j,1])
+                                weight_p = 1.0 + weight_p/float(len(p)*(len(p)-1))
+                                # weight_p = 1.0 + weight_p/(float(math.sqrt(len(p))*(len(p)-1)))
+                                # weight_p = 1.0 + weight_p/(float((len(p)-1)))
+                                weight_vec.append(weight_p)
+                                # print("W:", weight_p, end=",")
+                    else:
+                        print("Not implemented yet!")                           
            
-        edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
-        self.edge_df0 = edge_df
-        edge_df = edge_df.sort_values(by='weight', ascending=False)
-        self.edge_list = []
-        count = 0
-        while(len(edge_df.index) > 0):
-            count += 1
-            source_sol_temp = edge_df.iloc[0,0]
-            target_sol_temp = edge_df.iloc[0,1]
-            if edge_df.iloc[0,2] >= min_weight:
-                self.edge_list.append([source_sol_temp, target_sol_temp])
-                edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
-                edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
-                if count > 2000000:
+        if params['maximum_matching']=='greedy':
+            edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
+            self.edge_df0 = edge_df
+            edge_df = edge_df.sort_values(by='weight', ascending=False)
+            self.edge_list = []
+            count = 0
+            nodes_set = []
+            while(len(edge_df.index) > 0):
+                count += 1
+                source_sol_temp = edge_df.iloc[0,0]
+                target_sol_temp = edge_df.iloc[0,1]
+                if edge_df.iloc[0,2] >= min_weight:
+                    self.edge_list.append([source_sol_temp, target_sol_temp])
+                    edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
+                    edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
+                    nodes_set.append(source_sol_temp)
+                    nodes_set.append(target_sol_temp)
+                    if count > 200000000:
+                        break
+                else:
                     break
-            else:
-                break
-        
+        else:
+            print("Compute maximum matching")
+            edges = [(source_vec[i] + 't', target_vec[i] + 'h', weight_vec[i]) for i in range(len(source_vec))]
+            mm_graph = nx.Graph()
+            mm_graph.add_weighted_edges_from(edges)
+            maximum_matching = nx.max_weight_matching(mm_graph)
+            self.edge_list = []
+            for elem in maximum_matching:
+                node1 = elem[0]
+                node2 = elem[1]
+                if node1[-1]=='t':
+                    self.edge_list.append([node1[:-1], node2[:-1]])
+                else:
+                    self.edge_list.append([node2[:-1], node1[:-1]])
+                          
         self.contig_graph = nx.DiGraph()
-        self.contig_graph.add_edges_from(self.edge_list)
-        
+        self.contig_graph.add_edges_from(self.edge_list)            
         return self.contig_graph
+    
+    def remove_cycle(self, assembly_graph):
+        cycle_list = list(nx.simple_cycles(self.contig_graph))
+        for i in range(len(cycle_list)):
+            cycle_i = cycle_list[i]
+            for j in range(len(cycle_i)-1):
+                if not assembly_graph.has_edge(cycle_i[j], cycle_i[j+1]):
+                    self.contig_graph.remove_edge(cycle_i[j], cycle_i[j+1])
+                    break;
+        return self.contig_graph
+                
+        

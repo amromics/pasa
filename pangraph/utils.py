@@ -1,0 +1,150 @@
+import re
+from os.path import join, exists 
+
+def _convert_edgeStr (_edgeStr):
+    assert isinstance(_edgeStr, str) and 'EDGE_' in _edgeStr, "{} is not legal component from spades FASTG".format(edgeString)
+    _edgeId = _edgeStr.split('_')[1]
+    _edgeDirection = '-' if "'" in _edgeStr else '+'
+    return f'{_edgeId}{_edgeDirection}'
+
+def getContigsAdjacency(spadesOutDir=None, graphFilePath=None, pathFilePath=None):
+    if graphFilePath == None and spadesOutDir != None:
+        graphFilePath = join(spadesOutDir, 'assembly_graph.fastg')
+    if pathFilePath == None and spadesOutDir != None:
+        pathFilePath = join(spadesOutDir, 'contigs.paths')    
+        
+    assert exists(graphFilePath), "FASTG file not found"    
+    assert exists(pathFilePath), "Contig paths file not found"    
+
+    #Init set of link and dicts of endpoint
+    componentLinks = set()
+    contigLinks = set()
+    startDict = {}
+    endDict = {}
+    #Read links between components from assembly graph FASTG file
+    graph_file = open(graphFilePath, 'r')
+    for _line in graph_file.readlines():
+        if(_line.startswith('>')):
+            _edges_list = re.split(':|,', _line.strip());
+            if(len(_edges_list) <2):
+                continue
+            else:
+                #print("From {} to {}".format(_edges_list[0], _edges_list[1:]))
+                root = _convert_edgeStr(_edges_list[0])
+                for _edge in _edges_list[1:]:
+                    componentLinks.add((root, _convert_edgeStr(_edge)))
+                    #print("{},{}".format(root, _convert_edgeStr(_edge)))                
+    graph_file.close()
+    #Read endpoints of each path (CONTIG) consisting of above components
+    path_file = open(pathFilePath, 'r')
+    for _line in path_file.readlines():
+        if(_line.startswith('NODE_')):
+            ctg = _line.strip()
+        else:
+            _edges_from_path = _line.strip().split(',')
+            _start = _edges_from_path[0]; _end = _edges_from_path[-1]
+            if _start in startDict.keys():
+                startDict[_start].add(ctg)
+            else:
+                startDict[_start] = {ctg}
+
+            if _end in endDict.keys():
+                endDict[_end].add(ctg)
+            else:
+                endDict[_end] = {ctg}
+
+    path_file.close()
+
+    #Output all possible links between paths (contigs)
+    # <------leftCtg---------/-start-/-> <-/-end-/---rightCtg----->
+    #       
+    for start,end in componentLinks:
+        #print("{} to {}".format(start,end))
+        if (start in endDict.keys()) and (end in startDict.keys()):
+            for leftCtg in endDict[start]:
+                for rightCtg in startDict[end]:
+                    contigLinks.add((leftCtg, rightCtg))
+    return contigLinks
+
+def reverse_complement(seq):
+    complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', '_':'_','*':'*'}
+    # seq = "TCGGGCCC"
+    reverse_complement = "".join(complement.get(base, base) for base in reversed(seq))
+    return(reverse_complement)
+
+def getOverlapLength(i, j):
+    for ele in range(min(500,len(j)), -1, -1):
+        if i.endswith(j[:ele]):
+            return ele
+    return 0
+        
+def buildOverlapEdge(contigs, min_overlap=30, graph = "directed"):
+    # contigs: dict of contigs (key = contig id, value = sequence)
+    # min_overlap: minimum
+    # return: a list of overlap edges
+    ## reimplementing the reverse_complement: not all need to be computed.
+    edge_list_overlap = []
+    if graph=='directed':
+        for key1 in contigs:
+            for key2 in contigs:
+                if key1 != key2:
+                    if getOverlapLength(contigs[key1], contigs[key2]) >= min_overlap:
+                        edge_list_overlap.append((key1 + '+', key2 + '+'))
+                        edge_list_overlap.append((key2 + '-', key1 + '-'))
+                    minsize = min(len(contigs[key2]), 500)
+                    if getOverlapLength(contigs[key1], reverse_complement(contigs[key2][-minsize:-1])) >= min_overlap:
+                        edge_list_overlap.append((key1+ '+', key2 + '-'))
+                        edge_list_overlap.append((key2 + '+', key1 + '-'))
+    else:
+        for key1 in contigs:
+            for key2 in contigs:
+                if key1 != key2:
+                    if getOverlapLength(contigs[key1], contigs[key2]) >= min_overlap:
+                        edge_list_overlap.append((key1, key2))
+                    minsize = min(len(contigs[key2]), 500)
+                    if getOverlapLength(contigs[key1], reverse_complement(contigs[key2][-minsize:-1])) >= min_overlap:
+                        edge_list_overlap.append((key1, key2))
+                    
+    return(edge_list_overlap)             
+
+def read_contigs2dict(data_dir):
+    # Read the contigs
+    # https://coding4medicine.com/backup/Python/reading-fasta-files.html
+    # f=open('/data/hoan/amromics/simulation/art_output/spades_output/contigs.fasta','r')
+    f=open(data_dir,'r')
+    lines=f.readlines()
+
+    hre=re.compile('>(\S+)')
+    lre=re.compile('^(\S+)$')
+
+    gene={}
+
+    for line in lines:
+            outh = hre.search(line)
+            if outh:
+                    id=outh.group(1)
+            else:
+                    outl=lre.search(line)
+                    if(id in gene.keys()):
+                            gene[id] += outl.group(1)
+                    else:
+                            gene[id]  =outl.group(1)
+                            
+    return gene
+
+def write_fasta(dictionary, filename):
+    """
+    Takes a dictionary and writes it to a fasta file
+    Must specify the filename when caling the function
+    https://www.programcreek.com/python/?CodeExample=write+fasta
+    """
+
+    import textwrap
+    with open(filename, "w") as outfile:
+        for key, value in dictionary.items():
+            outfile.write(">")
+            outfile.write(key + "\n")
+            outfile.write("\n".join(textwrap.wrap(value, 60)))
+            outfile.write("\n")
+
+    print("Success! File written")
