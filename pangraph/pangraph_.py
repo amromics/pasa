@@ -36,7 +36,7 @@ class PanGraph():
         return (n_nucleo) 
     
 
-    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit"):
+    def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit", target_genome_id=-1):
         """Construct pangenome graph.
         Parameters
         ----------
@@ -142,25 +142,26 @@ class PanGraph():
                     print("Not implemented yet!")         
                         
                 ### append the weights
-                for j in range(len(gene_contigs)-1):
-                    rows.append(self.gene2cluster_dict[gene_contigs[j]])
-                    cols.append(self.gene2cluster_dict[gene_contigs[j+1]])
-                    weight_contig.append(1)
-                    
-                    # weight the edges also by contig.
-                    # weight_contig.append(5*i)
-                    ## highlight a contig
-                    # highlighted_contig = 1
-                    # if i == highlighted_contig:
-                    #     weight_contig.append(20)
-                    # else:
-                    #     weight_contig.append(1)
-                    # if self.gene_position.iloc[i,0] in highlight_genome_seq:
-                    #     weight_contig.append(5*n_samples)
-                    # else:
-                    #     weight_contig.append(1)
-                    #### weight the edges also by sample.
-                    # weight_contig.append(5*self.gene_position.iloc[i,0]+1)
+                if self.gene_position.iloc[i,0] != target_genome_id:
+                    for j in range(len(gene_contigs)-1):
+                        rows.append(self.gene2cluster_dict[gene_contigs[j]])
+                        cols.append(self.gene2cluster_dict[gene_contigs[j+1]])
+                        weight_contig.append(1)
+
+                        # weight the edges also by contig.
+                        # weight_contig.append(5*i)
+                        ## highlight a contig
+                        # highlighted_contig = 1
+                        # if i == highlighted_contig:
+                        #     weight_contig.append(20)
+                        # else:
+                        #     weight_contig.append(1)
+                        # if self.gene_position.iloc[i,0] in highlight_genome_seq:
+                        #     weight_contig.append(5*n_samples)
+                        # else:
+                        #     weight_contig.append(1)
+                        #### weight the edges also by sample.
+                        # weight_contig.append(5*self.gene_position.iloc[i,0]+1)
 
             ### Add contig ID
             for gene in gene_contigs:
@@ -173,6 +174,9 @@ class PanGraph():
         print("Set minimum on number of nucleotides = ", min_nucleotides, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
         # adj_matrix = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(self.n_clusters, self.n_clusters)).toarray()
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
+        print("Clip the matrix!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        adj_matrix = adj_matrix>=10
+        print(adj_matrix.shape)
         
         # if len(highlight_genome_seq) > 0 and only_two_weight:
         #     adj_matrix = (adj_matrix >= 5*n_samples)*10 + (adj_matrix > 0)*1
@@ -262,9 +266,6 @@ class PanGraph():
                     elif params['method']=="weight_path_assembly_v2":
                         ### only add the edge in the assembly graph
                         assembly_graph = params['assembly_graph']
-                        # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
-                        # source_node = self.sample_df.iloc[i,1]+self.strand[self.sample_df.iloc[i,1]]
-                        # target_node = self.sample_df.iloc[j,1]+self.strand[self.sample_df.iloc[j,1]]
                         path_len = 0
                         if assembly_graph.has_node(source_node) and assembly_graph.has_node(target_node):
                             try:
@@ -289,11 +290,16 @@ class PanGraph():
                                     weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
                                 source_vec.append(self.sample_df.iloc[i,1])
                                 target_vec.append(self.sample_df.iloc[j,1])
-                                weight_p = 1.0 + weight_p/float(len(p)*(len(p)-1))
+                                weight_p = 0.05 + weight_p/float(len(p)*(len(p)-1))
                                 # weight_p = 1.0 + weight_p/(float(math.sqrt(len(p))*(len(p)-1)))
                                 # weight_p = 1.0 + weight_p/(float((len(p)-1)))
                                 weight_vec.append(weight_p)
                                 # print("W:", weight_p, end=",")
+                            else:
+                                if path_len > 0 and path_len <2:
+                                    source_vec.append(self.sample_df.iloc[i,1])
+                                    target_vec.append(self.sample_df.iloc[j,1])
+                                    weight_vec.append(float(50.0/(path_len+1)))
                     else:
                         print("Not implemented yet!")                           
            
