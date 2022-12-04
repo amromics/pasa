@@ -5,23 +5,34 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import math
 from networkx import NetworkXNoPath
-    
+from .utils import getContigsAdjacency
+from .utils import generate_fasta_from_dict
+from .utils import buildOverlapEdge
+from .utils import read_contigs2dict
+from .utils import write_fasta
+from .utils import append_strand, append_strand_undirected
+
+
 class PanGraph():
     def __init__(self, sample_info, gene_info, gene_position, grades=None):
-        # input paramters
-        self.sample_info = sample_info
-        self.gene_info = gene_info
-        self.gene_position = gene_position
-        self.strand = {}
-        # self.grades = grades or {}
-       
-        # computed parameters
-        self.gene2cluster_dict = {}
-        self.n_clusters = len(self.gene_info.index)
-        for i in range(self.n_clusters):
-            self.gene2cluster_dict[self.gene_info.iloc[i,0]] = self.gene_info.iloc[i, 2]
-        self.head_contig = {} # the first gene in the contig
-        self.tail_contig = {} # the last gene in the contig
+        if sample_info is None:
+            return None
+        else:
+            # input paramters
+            self.sample_info = sample_info
+            self.gene_info = gene_info
+            self.gene_position = gene_position
+            self.strand = {}
+            # self.grades = grades or {}
+
+            # computed parameters
+            self.gene2cluster_dict = {}
+            self.n_clusters = len(self.gene_info.index)
+            self.n_samples = len(self.sample_info.index)
+            for i in range(self.n_clusters):
+                self.gene2cluster_dict[self.gene_info.iloc[i,0]] = self.gene_info.iloc[i, 2]
+            self.head_contig = {} # the first gene in the contig
+            self.tail_contig = {} # the last gene in the contig
 
     def map_edge_fn(self, i, j, N = 10000431):
         # map an edge (i, j) to a number.
@@ -35,6 +46,13 @@ class PanGraph():
             n_nucleo += int(gc[-2])
         return (n_nucleo) 
     
+    def flatten(self, l):
+        if len(l) == 1:
+            return l[0]
+        else:
+            return [item for sublist in l for item in sublist]
+    def remove_duplicate(self, your_list):
+        return ([v for i, v in enumerate(your_list) if i == 0 or v != your_list[i-1]])
 
     def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit", target_genome_id=-1):
         """Construct pangenome graph.
@@ -58,7 +76,7 @@ class PanGraph():
             The pangenome graph
         """
         thres_hold = 0.3 # match at least 30 %
-        
+        self.strand = {}
         n_contigs = len(self.gene_position.index)
         self.gene2contigs_dict = {}
         reverse_bool = {} # 0: no, 1: yes
@@ -174,9 +192,9 @@ class PanGraph():
         print("Set minimum on number of nucleotides = ", min_nucleotides, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
         # adj_matrix = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(self.n_clusters, self.n_clusters)).toarray()
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
-        print("Clip the matrix!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        adj_matrix = adj_matrix>=10
-        print(adj_matrix.shape)
+        print("Clip the matrix!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!20")
+        # adj_matrix = adj_matrix>=10 #version 1: quite good.
+        adj_matrix = adj_matrix.multiply(adj_matrix>=0.1*self.n_samples)
         
         # if len(highlight_genome_seq) > 0 and only_two_weight:
         #     adj_matrix = (adj_matrix >= 5*n_samples)*10 + (adj_matrix > 0)*1
@@ -186,7 +204,6 @@ class PanGraph():
         mapping = {i: "C-" + str(i) for i in range(self.n_clusters)}
         self.H = nx.relabel_nodes(self.H, mapping)
         return self.H
-
     
     def join_contig(self, sample_id, min_weight=1, method ="edge_weight", params = None):
         """Join contigs using pangenome graph.
@@ -267,14 +284,22 @@ class PanGraph():
                         ### only add the edge in the assembly graph
                         assembly_graph = params['assembly_graph']
                         path_len = 0
+                        path_nucleotides = 0
                         if assembly_graph.has_node(source_node) and assembly_graph.has_node(target_node):
                             try:
                                 path = nx.shortest_path(assembly_graph, source=source_node, target=target_node)
+                                path_nucleotides = 0
+                                for idxp in range(1, len(path)-1):
+                                    path_nucleotides = path_nucleotides + int(path[idxp].split("_")[3])
                                 path_len = len(path)
+                                # print(path)
+                                # print(path_nucleotides)
                             except NetworkXNoPath:
                                 path = None
                                 
-                        if path_len <= params['max_length']:
+                        # if path_len <= params['max_length']:
+                        if path_nucleotides <= params['max_length_nucleotides']:
+                            # print('I am lucky')
                             # print(self.sample_df.iloc[i,1], self.sample_df.iloc[j,1])
                             try:
                                 p = nx.shortest_path(self.H, source=source_id, target=target_id)
@@ -296,10 +321,11 @@ class PanGraph():
                                 weight_vec.append(weight_p)
                                 # print("W:", weight_p, end=",")
                             else:
-                                if path_len > 0 and path_len <2:
+                                if path_len > 0:
                                     source_vec.append(self.sample_df.iloc[i,1])
                                     target_vec.append(self.sample_df.iloc[j,1])
-                                    weight_vec.append(float(50.0/(path_len+1)))
+                                    weight_vec.append(float(0.2*self.n_samples/(path_len*path_len))) # gr_output_union_opt
+                                    # weight_vec.append(float(0.2*self.n_samples/(path_len))) # gr_output_union_opt
                     else:
                         print("Not implemented yet!")                           
            
@@ -330,6 +356,7 @@ class PanGraph():
             mm_graph = nx.Graph()
             mm_graph.add_weighted_edges_from(edges)
             maximum_matching = nx.max_weight_matching(mm_graph)
+            # maximum_matching = nx.max_weight_matching(mm_graph, maxcardinality=True)
             self.edge_list = []
             for elem in maximum_matching:
                 node1 = elem[0]
@@ -352,5 +379,173 @@ class PanGraph():
                     self.contig_graph.remove_edge(cycle_i[j], cycle_i[j+1])
                     break;
         return self.contig_graph
-                
+         
+    def hello_world(self):
+        print("Hi! print me")
         
+    def run_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching):
+        # assem_dir = '/data/hoan/amromics/simulation/art_output/spades_output' + simversion
+        
+        contig_dir = assem_dir + '/contigs.fasta'
+        # contig_dir = '/data/hoan/amromics/simulation/art_output/spades_output'+simversion+'/contigs.fasta'
+        # fasta_gen: {'all', 'partial'}, export fasta file (use all or partial contigs (ie. only joint contigs))
+            
+        ### Read the data
+        sample_info = pd.read_csv(data_dir + "/samples.tsv", delimiter='\t', header=None)
+        sample_info.columns = ['Name', 'SampleID']
+        gene_info = pd.read_csv(data_dir + "/gene_info.tsv", delimiter='\t', header=None)
+        gene_info.columns =['GeneName', 'SampleID', 'clusterID']
+        gene_position = pd.read_csv(data_dir + '/gene_position.tsv', delimiter='\t', header=None)
+        gene_position.columns =['SampleID', 'ContigName', 'GeneSequence']
+        # sort by length of contigs
+        gene_position.sort_values(by="GeneSequence", key=lambda x: x.str.len(),  ascending=False, inplace=True)
+        n_samples = len(np.unique(gene_position.iloc[:,0]))
+        incomplete_sample_id = sample_info[sample_info.Name==incomplete_sample_name].iloc[0,1]
+        
+        ### Construct pangraph
+        self.__init__(sample_info, gene_info, gene_position)
+        H = self.construct_graph(method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 10, min_genes = 0, 
+                                    target_genome_id=incomplete_sample_id)
+        
+        edge_list_assembly = []
+        for l,r in getContigsAdjacency(assem_dir):
+            edge_list_assembly.append((append_strand(l), append_strand(r)))
+
+        assembly_graph= nx.DiGraph()
+        assembly_graph.add_edges_from(edge_list_assembly)
+
+        gene = read_contigs2dict(contig_dir)
+        edge_list_overlap = buildOverlapEdge(gene, 20, 'directed')
+        print("Use union graph: overlap + assembly")
+        edge_list_final = edge_list_overlap + edge_list_assembly
+        assembly_graph= nx.DiGraph()
+        assembly_graph.add_edges_from(edge_list_final)
+        self.assembly_graph = assembly_graph
+        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000}
+        
+        contig_graph = self.join_contig(sample_id=incomplete_sample_id, min_weight=1.0, params=params)
+        contig_graph = self.remove_cycle(assembly_graph)
+        indegree_dict = dict(contig_graph.in_degree())
+        adj_list = {}
+        for source_node_key in indegree_dict:
+            if indegree_dict[source_node_key] == 0:
+                adj_list[source_node_key] = []
+                next_neighbor_temp = source_node_key
+                while(1):
+                    next_neighbor_temp = list(contig_graph.neighbors(next_neighbor_temp))
+                    if len(next_neighbor_temp) > 0:
+                        next_neighbor_temp = next_neighbor_temp[0]
+                        adj_list[source_node_key].append(next_neighbor_temp)
+                    else:
+                        break;
+
+        ## neu ko la adjacent thi bat dau bang contigs moi.
+        adj_list_assembly = {}
+        for key in adj_list:
+            new_key = key
+            path1 = adj_list[key].copy()
+            path1.insert(0, key)
+            path2 = [new_key + self.strand[new_key]]
+            for i in range(len(path1)-1):
+                src = path1[i] + self.strand[path1[i]]
+                dst = path1[i+1] + self.strand[path1[i+1]]
+                if not assembly_graph.has_node(src):
+                    path2.append(src)
+                elif not assembly_graph.has_node(dst):
+                    path2.append(src)
+                    continue
+                else:
+                    if nx.has_path(assembly_graph, src, dst):
+                        paths = [p for p in nx.all_shortest_paths(assembly_graph, src, dst)]
+                        # print(src, dst,"___", paths[0])  
+                        for node in paths[0]:
+                            path2.append(node)
+                    else:
+                        # print(src, dst,"___", paths[0])    
+                        path2.append(src)
+
+                        print("Will test this, Ok?")
+                        # # construct a new path if they are disconnected on the graph
+                        # if len(path2) > 0:
+                        #     adj_list_assembly[new_key+self.strand[new_key]] = self.remove_duplicate(path2)
+                        # new_key = dst[0:-1]
+                        # path2 = []           
+            if dst not in path2:
+                # print(path2)
+                path2.append(dst)
+            if len(path2) > 0:
+                adj_list_assembly[new_key+self.strand[new_key]] = self.remove_duplicate(path2)
+
+        # gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, 'all')
+        gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, fasta_gen)
+        write_fasta(gene_origin, output_dir)
+        
+        
+    def RERUN_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching):
+        # assem_dir = '/data/hoan/amromics/simulation/art_output/spades_output' + simversion
+
+        contig_dir = assem_dir + '/contigs.fasta'
+        # contig_dir = '/data/hoan/amromics/simulation/art_output/spades_output'+simversion+'/contigs.fasta'
+        # fasta_gen: {'all', 'partial'}, export fasta file (use all or partial contigs (ie. only joint contigs))
+        incomplete_sample_id = self.sample_info[self.sample_info.Name==incomplete_sample_name].iloc[0,1]
+        assembly_graph = self.assembly_graph 
+        gene = read_contigs2dict(contig_dir)
+        
+        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': self.assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000}
+
+        contig_graph = self.join_contig(sample_id=incomplete_sample_id, min_weight=1.0, params=params)
+        contig_graph = self.remove_cycle(assembly_graph)
+        indegree_dict = dict(contig_graph.in_degree())
+        adj_list = {}
+        for source_node_key in indegree_dict:
+            if indegree_dict[source_node_key] == 0:
+                adj_list[source_node_key] = []
+                next_neighbor_temp = source_node_key
+                while(1):
+                    next_neighbor_temp = list(contig_graph.neighbors(next_neighbor_temp))
+                    if len(next_neighbor_temp) > 0:
+                        next_neighbor_temp = next_neighbor_temp[0]
+                        adj_list[source_node_key].append(next_neighbor_temp)
+                    else:
+                        break;
+
+        ## neu ko la adjacent thi bat dau bang contigs moi.
+        adj_list_assembly = {}
+        for key in adj_list:
+            new_key = key
+            path1 = adj_list[key].copy()
+            path1.insert(0, key)
+            path2 = [new_key + self.strand[new_key]]
+            for i in range(len(path1)-1):
+                src = path1[i] + self.strand[path1[i]]
+                dst = path1[i+1] + self.strand[path1[i+1]]
+                if not assembly_graph.has_node(src):
+                    path2.append(src)
+                elif not assembly_graph.has_node(dst):
+                    path2.append(src)
+                    continue
+                else:
+                    if nx.has_path(assembly_graph, src, dst):
+                        paths = [p for p in nx.all_shortest_paths(assembly_graph, src, dst)]
+                        # print(src, dst,"___", paths[0])  
+                        for node in paths[0]:
+                            path2.append(node)
+                    else:
+                        # print(src, dst,"___", paths[0])    
+                        path2.append(src)
+
+                        print("Will test this, Ok?")
+                        # # construct a new path if they are disconnected on the graph
+                        # if len(path2) > 0:
+                        #     adj_list_assembly[new_key+self.strand[new_key]] = self.remove_duplicate(path2)
+                        # new_key = dst[0:-1]
+                        # path2 = []           
+            if dst not in path2:
+                # print(path2)
+                path2.append(dst)
+            if len(path2) > 0:
+                adj_list_assembly[new_key+self.strand[new_key]] = self.remove_duplicate(path2)
+
+        # gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, 'all')
+        gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, fasta_gen)
+        write_fasta(gene_origin, output_dir)

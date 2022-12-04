@@ -1,6 +1,17 @@
 import re
 from os.path import join, exists 
 
+def help_fnc(i, j):
+    for ele in range(min(500,len(j)), -1, -1):
+        if i.endswith(j[:ele]):
+            print(ele, end =":")
+            return j[ele:]
+        
+def overlap(a, b):
+    test_list = [a, b]
+    res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
+    return(res)
+
 def _convert_edgeStr (_edgeStr):
     assert isinstance(_edgeStr, str) and 'EDGE_' in _edgeStr, "{} is not legal component from spades FASTG".format(edgeString)
     _edgeId = _edgeStr.split('_')[1]
@@ -77,7 +88,20 @@ def getOverlapLength(i, j):
         if i.endswith(j[:ele]):
             return ele
     return 0
-        
+
+def append_strand(input_str):
+    if input_str[-1]=="'":
+        return (input_str[:-1] + '-')
+    else:
+        return (input_str + '+')
+
+def append_strand_undirected(input_str):
+    # print("Undirected!!!")
+    if input_str[-1]=="'":
+        return (input_str[:-1])
+    else:
+        return (input_str)
+    
 def buildOverlapEdge(contigs, min_overlap=30, graph = "directed"):
     # contigs: dict of contigs (key = contig id, value = sequence)
     # min_overlap: minimum
@@ -148,3 +172,61 @@ def write_fasta(dictionary, filename):
             outfile.write("\n")
 
     print("Success! File written")
+    
+    
+def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
+    # option (all or partial), all if generate all contigs, partial only joined contigs.
+    gene_origin = {}
+    if option =='partial':   
+        for key in adj_list_assembly:
+            path = adj_list_assembly[key]
+            if len(path) > 1:
+                source_node_key = key[:-1]
+                if key[-1]=='-':
+                    gene_origin[source_node_key] = reverse_complement(gene[source_node_key])
+                else:
+                    gene_origin[source_node_key] = gene[source_node_key]
+
+                for i in range(1, len(path)):
+                    # print(next_neighbor_temp)
+                    next_neighbor_temp = path[i][:-1]
+                    strand = path[i][-1]
+                    if strand == '+':
+                        # print(source_node_key)
+                        gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
+                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
+                    else:
+                        gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
+                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
+    elif option=='all':
+        # ## Keep all contigs
+        gene_origin = gene.copy()
+        # adj_list = {}
+        for key in adj_list_assembly:
+            path = adj_list_assembly[key]
+            if len(path) > 1:
+                source_node_key = key[:-1]
+                if key[-1]=='-':
+                    gene_origin[source_node_key] = reverse_complement(gene[source_node_key])
+
+                if source_node_key not in gene_origin:
+                    gene_origin[source_node_key] = gene[source_node_key]
+
+                for i in range(1, len(path)):
+                    # print(next_neighbor_temp)
+                    next_neighbor_temp = path[i][:-1]
+                    strand = path[i][-1]
+                    if strand == '+':
+                        # print(source_node_key)
+                        gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
+                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
+                    else:
+                        gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
+                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
+                    if next_neighbor_temp in gene_origin:
+                        del gene_origin[next_neighbor_temp]
+                        
+    else:
+        print("Don't support!!!")
+                
+    return(gene_origin)
