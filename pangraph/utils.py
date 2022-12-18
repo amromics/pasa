@@ -1,5 +1,6 @@
 import re
 from os.path import join, exists 
+import numpy as np
 
 def help_fnc(i, j):
     for ele in range(min(500,len(j)), -1, -1):
@@ -11,6 +12,22 @@ def overlap(a, b):
     test_list = [a, b]
     res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
     return(res)
+
+def max_common_subsequence(a, b):
+    result = np.zeros((len(a), len(b)))
+    n = max(len(a), len(b))
+    max_value = 0; best_max = 0
+    for i in range(len(a)):
+        for j in range(len(b)):
+            if (a[i]==b[j]):
+                result[i,j] = result[i-1,j-1]+1 #remember to initialize the borders with zeros
+            else:
+                result[i,j]=0
+    return(np.amax(result)/n)
+
+from difflib import SequenceMatcher
+def similarity_sequence(a, b):
+    return (SequenceMatcher(None, a, b).ratio())
 
 def _convert_edgeStr (_edgeStr):
     assert isinstance(_edgeStr, str) and 'EDGE_' in _edgeStr, "{} is not legal component from spades FASTG".format(edgeString)
