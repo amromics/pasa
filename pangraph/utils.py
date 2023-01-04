@@ -1,6 +1,8 @@
 import re
 from os.path import join, exists 
 import numpy as np
+import networkx as nx
+from networkx import NetworkXNoPath
 
 def help_fnc(i, j):
     for ele in range(min(500,len(j)), -1, -1):
@@ -11,7 +13,7 @@ def help_fnc(i, j):
 def overlap(a, b):
     test_list = [a, b]
     res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
-    return(res)
+    turn(res)
 
 def max_common_subsequence(a, b):
     result = np.zeros((len(a), len(b)))
@@ -34,6 +36,16 @@ def _convert_edgeStr (_edgeStr):
     _edgeId = _edgeStr.split('_')[1]
     _edgeDirection = '-' if "'" in _edgeStr else '+'
     return f'{_edgeId}{_edgeDirection}'
+
+def _get_node_length (_edgeStr):
+    assert isinstance(_edgeStr, str) and 'EDGE_' in _edgeStr, "{} is not legal component from spades FASTG".format(edgeString)
+    _edgeId = _edgeStr.split('_')[3]
+    return int(_edgeId)
+def append_strand(nodeStr):
+    if "'" in nodeStr:
+        return nodeStr[:-1] + '-'
+    else:
+        return nodeStr + '+'
 
 def getContigsAdjacency(spadesOutDir=None, graphFilePath=None, pathFilePath=None):
     if graphFilePath == None and spadesOutDir != None:
@@ -93,6 +105,95 @@ def getContigsAdjacency(spadesOutDir=None, graphFilePath=None, pathFilePath=None
                 for rightCtg in startDict[end]:
                     contigLinks.add((leftCtg, rightCtg))
     return contigLinks
+
+def getContigsAdjacency_v2(spadesOutDir=None, graphFilePath=None, pathFilePath=None):
+    if graphFilePath == None and spadesOutDir != None:
+        graphFilePath = join(spadesOutDir, 'assembly_graph.fastg')
+    if pathFilePath == None and spadesOutDir != None:
+        pathFilePath = join(spadesOutDir, 'contigs.paths')    
+        
+    assert exists(graphFilePath), "FASTG file not found"    
+    assert exists(pathFilePath), "Contig paths file not found"    
+
+    #Init set of link and dicts of endpoint
+    componentLinks = set()
+    contigLinks = set()
+    startDict = {}
+    endDict = {}
+    nodeweightDict = {}
+    #Read links between components from assembly graph FASTG file
+    graph_file = open(graphFilePath, 'r')
+    for _line in graph_file.readlines():
+        if(_line.startswith('>')):
+            _edges_list = re.split(':|,', _line.strip());
+            if(len(_edges_list) <2):
+                continue
+            else:
+                #print("From {} to {}".format(_edges_list[0], _edges_list[1:]))
+                root = _convert_edgeStr(_edges_list[0])
+                for _edge in _edges_list[1:]:
+                    componentLinks.add((root, _convert_edgeStr(_edge)))
+                    nodeweightDict[_convert_edgeStr(_edge)] = int(_get_node_length(_edge))
+                    #print("{},{}".format(root, _convert_edgeStr(_edge)))                
+    graph_file.close()
+    #Read endpoints of each path (CONTIG) consisting of above components
+    path_file = open(pathFilePath, 'r')
+    contigs_list = []
+    for _line in path_file.readlines():
+        if(_line.startswith('NODE_')):
+            ctg = _line.strip()
+            contigs_list.append(ctg)
+        else:
+            _edges_from_path = _line.strip().split(',')
+            _start = _edges_from_path[0]; _end = _edges_from_path[-1]
+            startDict[ctg] = _start
+            endDict[ctg] = _end
+
+    path_file.close()
+    # for start,end in componentLinks:
+    #     if (start in endDict.keys()) and (end in startDict.keys()):
+    #         for leftCtg in endDict[start]:
+    #             for rightCtg in startDict[end]:
+    #                 contigLinks.add((leftCtg, rightCtg))
+    # return contigLinks
+    assembly_graph= nx.DiGraph()
+    assembly_graph.add_edges_from(list(componentLinks))
+    n_contigs = len(contigs_list)
+    # print(nodeweightDict)
+    edges_list = []
+    weight_vec = []
+    for i in range(n_contigs):
+        for j in range(i+1, n_contigs):
+            leftCtg = contigs_list[i]
+            rightCtg = contigs_list[j]
+            # print(leftCtg, rightCtg)
+            if leftCtg[:12] != rightCtg[:12]:
+                endLeftCtg = endDict[leftCtg]
+                startrightCtg = startDict[rightCtg]
+                if assembly_graph.has_node(endLeftCtg) and assembly_graph.has_node(startrightCtg):
+                    path_nucleotides = 0
+                    path_len = -1
+                    try:
+                        path = nx.shortest_path(assembly_graph, source=endLeftCtg, target=startrightCtg)
+                        for idxp in range(1, len(path)-1):
+                            path_nucleotides = path_nucleotides + nodeweightDict[path[idxp]]
+                        path_len = len(path)
+                    except NetworkXNoPath:
+                        path = None
+                    if path != None and path_nucleotides < 1000:
+                    # if path != None and path_len <= 2: # =2 <=> directed graph
+                        contigLinks.add((leftCtg, rightCtg))
+                    if path != None:
+                        edges_list.append((append_strand(leftCtg), append_strand(rightCtg)))
+                        weight_vec.append(path_nucleotides)
+
+    weight_vec = np.array(weight_vec)
+    weight_vec = np.interp(weight_vec, (weight_vec.min(), weight_vec.max()), (1.0, 100.0))
+    wp_vec = [(edges_list[i][0], edges_list[i][1], weight_vec[i]) for i in range(len(weight_vec))]
+    weighted_CG = nx.DiGraph()
+    weighted_CG.add_weighted_edges_from(wp_vec)
+    return (contigLinks, weighted_CG)
+
 
 def reverse_complement(seq):
     complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', '_':'_','*':'*'}
@@ -189,7 +290,6 @@ def write_fasta(dictionary, filename):
             outfile.write("\n")
 
     print("Success! File written")
-    
     
 def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
     # option (all or partial), all if generate all contigs, partial only joined contigs.

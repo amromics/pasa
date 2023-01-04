@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import math
 from networkx import NetworkXNoPath
 from .utils import getContigsAdjacency
+from .utils import getContigsAdjacency_v2
 from .utils import generate_fasta_from_dict
 from .utils import buildOverlapEdge
 from .utils import read_contigs2dict
@@ -77,7 +78,6 @@ class PanGraph():
         H : networkx graph
             The pangenome graph
         """
-        thres_hold = 0.3 # match at least 30 %
         self.strand = {}
         n_contigs = len(self.gene_position.index)
         self.gene2contigs_dict = {}
@@ -108,7 +108,6 @@ class PanGraph():
                 
         ### Compute the target mini-graphgenome
         current_genome_id = 0
-        # target_genome_edge = set()
         target_genome_edge = []
         if edge_weight=="adjusted":
             print("Use target adjusted weight scheme!!!")
@@ -150,7 +149,8 @@ class PanGraph():
         # print(string2)
         for i in range(current_genome_id, n_contigs):
             gene_contigs = self.gene_position.iloc[i,2].split(";")
-            if self.compute_number_nucleotides(gene_contigs) >= min_nucleotides and len(gene_contigs) >= min_genes:
+            adjusted_min_genes = min_genes if self.gene_position.iloc[i,0] == target_genome_id else 10 # use adjusted gene_contigs
+            if self.compute_number_nucleotides(gene_contigs) >= min_nucleotides and len(gene_contigs) >= adjusted_min_genes:
                 current_sequence_edge = None
                 n_computed_contig = n_computed_contig + 1
                 ### align to reference
@@ -211,7 +211,6 @@ class PanGraph():
                 
                 else:
                     print("Not implemented yet!")         
-                        
                 ### append the weights
                 if self.gene_position.iloc[i,0] != target_genome_id:
                     for j in range(len(gene_contigs)-1):
@@ -237,7 +236,6 @@ class PanGraph():
                             # print(round(100*weight_value), end =',')
                         else:
                             print("Not impletement yet!!")
-
                         # weight the edges also by contig.
                         # weight_contig.append(5*i)
                         ## highlight a contig
@@ -267,7 +265,7 @@ class PanGraph():
             
         print("Set minimum on number of nucleotides = ", min_nucleotides, "NUMBER OF COMPUTED CONTIGS:", n_computed_contig)
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
-        print("Clip the matrixn 0.2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("Clip the matrix 0.2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         # adj_matrix = adj_matrix>=10 #version 1: quite good.
         adj_matrix = adj_matrix.multiply(adj_matrix>=0.2*self.n_samples)
         self.H = nx.from_numpy_matrix(adj_matrix, create_using=nx.DiGraph)
@@ -275,7 +273,6 @@ class PanGraph():
         mapping = {i: "C-" + str(i) for i in range(self.n_clusters)}
         self.H = nx.relabel_nodes(self.H, mapping)
         return self.H
-    
     
     def join_contig(self, sample_id, min_weight=1, method ="edge_weight", params = None):
         """Join contigs using pangenome graph.
@@ -288,7 +285,6 @@ class PanGraph():
         H : networkx graph
             The pangenome graph
         """
-        
         self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==sample_id]
         source_vec = []
         target_vec = []
@@ -355,46 +351,44 @@ class PanGraph():
                                     # print("W:", weight_p, end=",")
                     elif params['method']=="weight_path_assembly_v2":
                         ### only add the edge in the assembly graph
-                        path_len = 0
-                        path_nucleotides = 0
+                        path_len = -1
+                        path_nucleotides = -1
                         if assembly_graph.has_node(source_node) and assembly_graph.has_node(target_node):
                             try:
                                 path = nx.shortest_path(assembly_graph, source=source_node, target=target_node)
-                                path_nucleotides = 0
                                 for idxp in range(1, len(path)-1):
                                     path_nucleotides = path_nucleotides + int(path[idxp].split("_")[3])
                                 path_len = len(path)
-                                # print(path)
-                                # print(path_nucleotides)
                             except NetworkXNoPath:
                                 path = None
                                 
                         # if path_len <= params['max_length']:
+                        # if i==0 and j<= 5:
+                        #     print("Use path len + path nucleotide")
                         if path_nucleotides <= params['max_length_nucleotides']:
-                            if False: ## Only use the end gene in the contig.
-                                print("Old code")
-                                # try:
-                                #     p = nx.shortest_path(self.H, source=source_id, target=target_id)
-                                # except NetworkXNoPath:
-                                #     p = None
-                                # if p is not None:                               
-                                #     weight_p = 0.0
-                                #     for node_p_idx in range(len(p)-1):
-                                #         weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
-                                #     source_vec.append(self.sample_df.iloc[i,1])
-                                #     target_vec.append(self.sample_df.iloc[j,1])
-                                #     weight_p = 0.05 + weight_p/float(len(p)*(len(p)-1))
-                                #     # weight_p = 1.0 + weight_p/(float(math.sqrt(len(p))*(len(p)-1)))
-                                #     # weight_p = 1.0 + weight_p/(float((len(p)-1)))
-                                #     weight_vec.append(weight_p)
-                                #     # print("W:", weight_p, end=",")
-                                # else:
-                                #     if path_len > 0:
-                                #         source_vec.append(self.sample_df.iloc[i,1])
-                                #         target_vec.append(self.sample_df.iloc[j,1])
-                                #         weight_vec.append(float(0.2*self.n_samples/(path_len*path_len))) # gr_output_union_opt
-                                #         # weight_vec.append(float(0.2*self.n_samples/(path_len))) # gr_output_union_opt
-                            else: ## Use long tail
+                            if False: ## Only use the end gene in the contig.  print("Old code")
+                                try:
+                                    p = nx.shortest_path(self.H, source=source_id, target=target_id)
+                                except NetworkXNoPath:
+                                    p = None
+                                if p is not None:                               
+                                    weight_p = 0.0
+                                    for node_p_idx in range(len(p)-1):
+                                        weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                                    source_vec.append(self.sample_df.iloc[i,1])
+                                    target_vec.append(self.sample_df.iloc[j,1])
+                                    weight_p = 0.05 + weight_p/float(len(p)*(len(p)-1))
+                                    # weight_p = 1.0 + weight_p/(float(math.sqrt(len(p))*(len(p)-1)))
+                                    # weight_p = 1.0 + weight_p/(float((len(p)-1)))
+                                    weight_vec.append(weight_p)
+                                    # print("W:", weight_p, end=",")
+                                else:
+                                    if path_len > 0:
+                                        source_vec.append(self.sample_df.iloc[i,1])
+                                        target_vec.append(self.sample_df.iloc[j,1])
+                                        weight_vec.append(float(0.2*self.n_samples/(path_len*path_len))) # gr_output_union_opt
+                                        # weight_vec.append(float(0.2*self.n_samples/(path_len))) # gr_output_union_opt
+                            else: ## Use long tail (default)
                                 path_weight_vec = []
                                 for tail_gene in self.longtail_contig[self.sample_df.iloc[i,1]]:
                                     for head_gene in self.longhead_contig[self.sample_df.iloc[j,1]]:
@@ -408,28 +402,94 @@ class PanGraph():
                                         if p is not None:                               
                                             for node_p_idx in range(len(p)-1):
                                                 weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
-                                            weight_p = 0.05 + weight_p/float(len(p)*(len(p)-1))
-                                            path_weight_vec.append(weight_p)
+                                            if len(p) >= 2:
+                                                weight_p = 0.05 + weight_p/float((len(p)-1)*(len(p)-1))
+                                                path_weight_vec.append(weight_p)
                                             # print("W:", weight_p, end=",")
+                                # if len(path_weight_vec)==0 and  path_len > 0:
                                 if len(path_weight_vec)==0 and  path_len > 0:
                                     path_weight_vec.append(float(0.2*self.n_samples/(path_len*path_len))) 
                                     # path_weight_vec.append(float(0.3*self.n_samples/(path_len*path_len*path_len))) 
+                                    # path_weight_vec.append(0.05)
                                 if len(path_weight_vec) > 0:
                                     weight_p = np.average(np.array(path_weight_vec))
                                     # print("W:", weight_p, end=",")
-                                    if weight_p > 0.08:
+                                    if weight_p > 0.005:
                                         source_vec.append(self.sample_df.iloc[i,1])
                                         target_vec.append(self.sample_df.iloc[j,1])
                                         ## Reduce the cost by 50% if there is no path in the assembly graph.
                                         if i < 2 and j < 2:
                                             print("Reduce the cost by 1/2 if there is no path in the assembly graph")
-                                        if path_nucleotides > 1:
+                                        if path_nucleotides > 1.0:
                                             weight_vec.append(weight_p)
                                         else:
                                             weight_vec.append(0.5*weight_p)
+                            # else: 
+                            #     path_weight_vec = []
+                            #     for tail_gene in self.longtail_contig[self.sample_df.iloc[i,1]]:
+                            #         for head_gene in self.longhead_contig[self.sample_df.iloc[j,1]]:
+                            #             source_id = 'C-' + str(tail_gene)
+                            #             target_id = 'C-' + str(head_gene)  
+                            #             weight_p = 0.0
+                            #             try:
+                            #                 p = nx.shortest_path(self.H, source=source_id, target=target_id)
+                            #             except NetworkXNoPath:
+                            #                 p = None
+                            #             if p is not None:                               
+                            #                 for node_p_idx in range(len(p)-1):
+                            #                     weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                            #                 if len(p) >= 2:
+                            #                     weight_p = 0.05 + weight_p/float((len(p)-1)*(len(p)-1))
+                            #                     path_weight_vec.append(weight_p)
+                            #                     # print("W:", weight_p, end=",")
+                            #     # if len(path_weight_vec)==0 and  path_len >= 0:
+                            #     if len(path_weight_vec)==0:
+                            #         # path_weight_vec.append(float(0.2*self.n_samples/(path_len*path_len))) 
+                            #         # path_weight_vec.append(1.0)
+                            #         if self.weighted_CG.has_edge(source_node, target_node):
+                            #             edge_weight = self.weighted_CG[source_node][target_node]['weight']
+                            #             print("a", end = "")
+                            #             path_weight_vec.append(1.0/edge_weight)
+                            #     if len(path_weight_vec) > 0:
+                            #         weight_p = np.average(np.array(path_weight_vec))
+                            #         # print("W:", weight_p, end=",")
+                            #         if weight_p > 0.0005:
+                            #             source_vec.append(self.sample_df.iloc[i,1])
+                            #             target_vec.append(self.sample_df.iloc[j,1])
+                            #             # weight_vec.append(2.0)
+                            #             ## Reduce the cost by 50% if there is no path in the assembly graph.
+                            #             # if i < 2 and j < 2:
+                            #             #     print("Reduce the cost by 1/2 if there is no path in the assembly graph")
+                            #             if path_nucleotides > -0.5:
+                            #                 # source_vec.append(self.sample_df.iloc[i,1])
+                            #                 # target_vec.append(self.sample_df.iloc[j,1])
+                            #                 weight_vec.append(weight_p)
+                            #                 # weight_vec.append(1.0)
+                            #             else:
+                            #                 weight_vec.append(0.5*weight_p)
+                            #                 # weight_vec.append(1.0*weight_p)
+                            #                 # weight_vec.append(1.0)
+
                     else:
                         print("Not implemented yet!")                           
-           
+        # print("if no connection, use eps weight")
+        # contigName2ID = {}
+        # n_sample_contig = len(self.sample_df.index)
+        # for ido in range(len(self.sample_df.index)):
+        #     contigName2ID[self.sample_df.iloc[ido,1]] = ido
+        # binary_matrix = np.zeros((n_sample_contig, n_sample_contig))
+        # for ido in range(len(source_vec)):
+        #     row_id = contigName2ID[source_vec[ido]]
+        #     col_id = contigName2ID[target_vec[ido]]
+        #     binary_matrix[row_id,col_id] = weight_vec[ido]
+        # eps = 0.0001
+        # for ido in range(n_sample_contig):
+        #     for jdo in range(n_sample_contig):
+        #         if binary_matrix[ido, jdo] < eps and ido != jdo:
+        #             source_vec.append(self.sample_df.iloc[ido,1])
+        #             target_vec.append(self.sample_df.iloc[jdo,1])
+        #             weight_vec.append(eps)
+
         if params['maximum_matching']=='greedy':
             edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
             self.edge_df0 = edge_df
@@ -456,8 +516,8 @@ class PanGraph():
             edges = [(source_vec[i] + 't', target_vec[i] + 'h', weight_vec[i]) for i in range(len(source_vec))]
             mm_graph = nx.Graph()
             mm_graph.add_weighted_edges_from(edges)
-            maximum_matching = nx.max_weight_matching(mm_graph)
-            # maximum_matching = nx.max_weight_matching(mm_graph, maxcardinality=True)
+            # maximum_matching = nx.max_weight_matching(mm_graph)
+            maximum_matching = nx.max_weight_matching(mm_graph, maxcardinality=True)
             self.edge_list = []
             for elem in maximum_matching:
                 node1 = elem[0]
@@ -481,11 +541,7 @@ class PanGraph():
         return self.contig_graph
          
     def run_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching):
-        # assem_dir = '/data/hoan/amromics/simulation/art_output/spades_output' + simversion
-        
         contig_dir = assem_dir + '/contigs.fasta'
-        # contig_dir = '/data/hoan/amromics/simulation/art_output/spades_output'+simversion+'/contigs.fasta'
-        # fasta_gen: {'all', 'partial'}, export fasta file (use all or partial contigs (ie. only joint contigs))
         ### Read the data
         sample_info = pd.read_csv(data_dir + "/samples.tsv", delimiter='\t', header=None)
         sample_info.columns = ['Name', 'SampleID']
@@ -497,29 +553,32 @@ class PanGraph():
         gene_position.sort_values(by="GeneSequence", key=lambda x: x.str.len(),  ascending=False, inplace=True)
         n_samples = len(np.unique(gene_position.iloc[:,0]))
         incomplete_sample_id = sample_info[sample_info.Name==incomplete_sample_name].iloc[0,1]
-        
         ### Construct pangraph
         self.__init__(sample_info, gene_info, gene_position)
         # H = self.construct_graph(method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 10, min_genes = 0, edge_weight="adjusted",
         H = self.construct_graph(method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 10, min_genes = 0, edge_weight="unit",
                                     target_genome_id=incomplete_sample_id)
-        
         edge_list_assembly = []
-        for l,r in getContigsAdjacency(assem_dir):
-            edge_list_assembly.append((append_strand(l), append_strand(r)))
-
-        assembly_graph= nx.DiGraph()
-        assembly_graph.add_edges_from(edge_list_assembly)
-
+        self.weighted_CG = None
+        if 1:
+            print("Use simple assembly graph")
+            for l,r in getContigsAdjacency(assem_dir):
+                edge_list_assembly.append((append_strand(l), append_strand(r)))
+        else:
+            print("Use modified  assembly graph")
+            linkEdges, self.weighted_CG = getContigsAdjacency_v2(assem_dir)
+            for l, r in linkEdges:
+            # for l,r in getContigsAdjacency_v2(assem_dir):
+                edge_list_assembly.append((append_strand(l), append_strand(r)))
         gene = read_contigs2dict(contig_dir)
         edge_list_overlap = buildOverlapEdge(gene, 20, 'directed')
         print("Use union graph: overlap + assembly")
         edge_list_final = edge_list_overlap + edge_list_assembly
+        # edge_list_final = edge_list_assembly
         assembly_graph= nx.DiGraph()
         assembly_graph.add_edges_from(edge_list_final)
         self.assembly_graph = assembly_graph
-        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000}
-        
+        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000, 'weighted_CG': self.weighted_CG}
         contig_graph = self.join_contig(sample_id=incomplete_sample_id, min_weight=1.0, params=params)
         contig_graph = self.remove_cycle(assembly_graph)
         indegree_dict = dict(contig_graph.in_degree())
@@ -535,7 +594,6 @@ class PanGraph():
                         adj_list[source_node_key].append(next_neighbor_temp)
                     else:
                         break;
-
         ## neu ko la adjacent thi bat dau bang contigs moi.
         adj_list_assembly = {}
         for key in adj_list:
@@ -576,19 +634,13 @@ class PanGraph():
         gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, fasta_gen)
         write_fasta(gene_origin, output_dir)
         
-        
     def RERUN_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching):
-        # assem_dir = '/data/hoan/amromics/simulation/art_output/spades_output' + simversion
-
         contig_dir = assem_dir + '/contigs.fasta'
-        # contig_dir = '/data/hoan/amromics/simulation/art_output/spades_output'+simversion+'/contigs.fasta'
-        # fasta_gen: {'all', 'partial'}, export fasta file (use all or partial contigs (ie. only joint contigs))
         incomplete_sample_id = self.sample_info[self.sample_info.Name==incomplete_sample_name].iloc[0,1]
         assembly_graph = self.assembly_graph 
         gene = read_contigs2dict(contig_dir)
-        
-        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': self.assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000}
-
+        # params = {'method': 'weight_path_assembly_v2', 'assembly_graph': self.assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000}
+        params = {'method': 'weight_path_assembly_v2', 'assembly_graph': assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000, 'weighted_CG': self.weighted_CG}
         contig_graph = self.join_contig(sample_id=incomplete_sample_id, min_weight=1.0, params=params)
         contig_graph = self.remove_cycle(assembly_graph)
         indegree_dict = dict(contig_graph.in_degree())
@@ -604,7 +656,6 @@ class PanGraph():
                         adj_list[source_node_key].append(next_neighbor_temp)
                     else:
                         break;
-
         ## neu ko la adjacent thi bat dau bang contigs moi.
         adj_list_assembly = {}
         for key in adj_list:
@@ -641,7 +692,5 @@ class PanGraph():
                 path2.append(dst)
             if len(path2) > 0:
                 adj_list_assembly[new_key+self.strand[new_key]] = self.remove_duplicate(path2)
-
-        # gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, 'all')
         gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, fasta_gen)
         write_fasta(gene_origin, output_dir)
