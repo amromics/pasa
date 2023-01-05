@@ -188,7 +188,7 @@ def getContigsAdjacency_v2(spadesOutDir=None, graphFilePath=None, pathFilePath=N
                         weight_vec.append(path_nucleotides)
 
     weight_vec = np.array(weight_vec)
-    weight_vec = np.interp(weight_vec, (weight_vec.min(), weight_vec.max()), (1.0, 100.0))
+    weight_vec = np.interp(weight_vec, (weight_vec.min(), weight_vec.max()), (1.0, 10.0))
     wp_vec = [(edges_list[i][0], edges_list[i][1], weight_vec[i]) for i in range(len(weight_vec))]
     weighted_CG = nx.DiGraph()
     weighted_CG.add_weighted_edges_from(wp_vec)

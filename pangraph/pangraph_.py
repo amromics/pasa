@@ -595,6 +595,7 @@ class PanGraph():
                     else:
                         break;
         ## neu ko la adjacent thi bat dau bang contigs moi.
+        self.adj_list0 = adj_list
         adj_list_assembly = {}
         for key in adj_list:
             new_key = key
@@ -657,6 +658,7 @@ class PanGraph():
                     else:
                         break;
         ## neu ko la adjacent thi bat dau bang contigs moi.
+        self.adj_list1 = adj_list
         adj_list_assembly = {}
         for key in adj_list:
             new_key = key
