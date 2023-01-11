@@ -15,6 +15,8 @@ def overlap(a, b):
     res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
     turn(res)
 
+
+
 def max_common_subsequence(a, b):
     result = np.zeros((len(a), len(b)))
     n = max(len(a), len(b))
@@ -46,6 +48,11 @@ def append_strand(nodeStr):
         return nodeStr[:-1] + '-'
     else:
         return nodeStr + '+'
+def append_strand_reverse(nodeStr):
+    if "'" in nodeStr:
+        return nodeStr[:-1] + '+'
+    else:
+        return nodeStr + '-'
 
 def getContigsAdjacency(spadesOutDir=None, graphFilePath=None, pathFilePath=None):
     if graphFilePath == None and spadesOutDir != None:
@@ -180,7 +187,7 @@ def getContigsAdjacency_v2(spadesOutDir=None, graphFilePath=None, pathFilePath=N
                         path_len = len(path)
                     except NetworkXNoPath:
                         path = None
-                    if path != None and path_nucleotides < 1000:
+                    if path != None and path_nucleotides <= 500:
                     # if path != None and path_len <= 2: # =2 <=> directed graph
                         contigLinks.add((leftCtg, rightCtg))
                     if path != None:

@@ -11,7 +11,7 @@ from .utils import generate_fasta_from_dict
 from .utils import buildOverlapEdge
 from .utils import read_contigs2dict
 from .utils import write_fasta, max_common_subsequence, similarity_sequence
-from .utils import append_strand, append_strand_undirected
+from .utils import append_strand, append_strand_undirected, append_strand_reverse
 
 class PanGraph():
     def __init__(self, sample_info, gene_info, gene_position, grades=None):
@@ -55,6 +55,9 @@ class PanGraph():
             return [item for sublist in l for item in sublist]
     def remove_duplicate(self, your_list):
         return ([v for i, v in enumerate(your_list) if i == 0 or v != your_list[i-1]])
+
+    def get_node_coverage(self, node_id):
+        return(float(node_id.split("_")[5]))
 
     def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit", target_genome_id=-1):
         """Construct pangenome graph.
@@ -490,6 +493,15 @@ class PanGraph():
         #             target_vec.append(self.sample_df.iloc[jdo,1])
         #             weight_vec.append(eps)
 
+        # print("XXXXXXX recompute the node, only use the node with multiplicity = 1")
+        # source0= []; target0 = []; weight0 = []
+        # for i in range(len(source_vec)):
+        #     if self.get_node_coverage(source_vec[i]) <= 22.0 and self.get_node_coverage(target_vec[i]) <= 22.0:
+        #         source0.append(source_vec[i])
+        #         target0.append(target_vec[i])
+        #         weight0.append(weight_vec[i])
+        # source_vec = source0; target_vec = target0; weight_vec = weight0
+
         if params['maximum_matching']=='greedy':
             edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
             self.edge_df0 = edge_df
@@ -560,16 +572,18 @@ class PanGraph():
                                     target_genome_id=incomplete_sample_id)
         edge_list_assembly = []
         self.weighted_CG = None
-        if 1:
+        if 0:
             print("Use simple assembly graph")
             for l,r in getContigsAdjacency(assem_dir):
                 edge_list_assembly.append((append_strand(l), append_strand(r)))
+                edge_list_assembly.append((append_strand_reverse(r), append_strand_reverse(l)))
         else:
             print("Use modified  assembly graph")
             linkEdges, self.weighted_CG = getContigsAdjacency_v2(assem_dir)
             for l, r in linkEdges:
             # for l,r in getContigsAdjacency_v2(assem_dir):
                 edge_list_assembly.append((append_strand(l), append_strand(r)))
+                edge_list_assembly.append((append_strand_reverse(r), append_strand_reverse(l)))
         gene = read_contigs2dict(contig_dir)
         edge_list_overlap = buildOverlapEdge(gene, 20, 'directed')
         print("Use union graph: overlap + assembly")
