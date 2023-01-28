@@ -3,6 +3,10 @@ from os.path import join, exists
 import numpy as np
 import networkx as nx
 from networkx import NetworkXNoPath
+import json
+import os
+import pandas as pd
+import gzip
 
 def help_fnc(i, j):
     for ele in range(min(500,len(j)), -1, -1):
@@ -305,14 +309,15 @@ def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
         for key in adj_list_assembly:
             path = adj_list_assembly[key]
             if len(path) > 1:
-                source_node_key = key[:-1]
-                if key[-1]=='-':
-                    gene_origin[source_node_key] = reverse_complement(gene[source_node_key])
-                else:
-                    gene_origin[source_node_key] = gene[source_node_key]
-
-                for i in range(1, len(path)):
-                    # print(next_neighbor_temp)
+                # source_node_key = key[:-1]
+                # if key[-1]=='-':
+                #     gene_origin[source_node_key] = reverse_complement(gene[source_node_key])
+                # else:
+                #     gene_origin[source_node_key] = gene[source_node_key]
+                # for i in range(1, len(path)):
+                source_node_key = key
+                gene_origin[source_node_key] = ''
+                for i in range(len(path)):
                     next_neighbor_temp = path[i][:-1]
                     strand = path[i][-1]
                     if strand == '+':
@@ -354,3 +359,95 @@ def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
         print("Don't support!!!")
                 
     return(gene_origin)
+
+
+def export_metadata(path_out_pangenome):
+    dict_samples=json.load(open(os.path.join(path_out_pangenome,'samples.json')))
+    #print(dict_samples)
+    map_stringid_to_numberic_id={}
+    for i in range(len(dict_samples)):
+        #print(dict_samples[i]['id'])
+        map_stringid_to_numberic_id[dict_samples[i]['id']]=i
+    # print(map_stringid_to_numberic_id)
+    dict_clusters=json.load(open(os.path.join(path_out_pangenome,'clusters.json')))
+    map_geneid_to_numberic_cid={}
+    cindex=0
+    for k in dict_clusters.keys():
+        # print(k)
+        # print(dict_clusters[k])
+        map_geneid_to_numberic_cid[k] =cindex
+
+        for g in dict_clusters[k]:
+            map_geneid_to_numberic_cid[g]=cindex
+        cindex=cindex+1
+        #map_stringid_to_numberic_id[dict_samples[i]['id']]=i
+    # print(map_geneid_to_numberic_cid)
+    #map gene to strain
+    df_annotations= pd.read_csv(os.path.join(path_out_pangenome,'gene_annotation.csv.gz'))
+    # print(df_annotations.head())
+    map_geneid_to_info={}
+    for index, row  in df_annotations.iterrows():
+        strand='1'
+        if row['strand']=='-':
+            strand='-1'
+        map_geneid_to_info[row['gene_id']]={'sample_id':row['sample_id'],'seq_id':row['seq_id'],'length':row['length'],'strand':strand}
+    # print(map_geneid_to_info)
+    #samples.tsv
+    with open(os.path.join(path_out_pangenome,'samples.tsv'), 'w') as sampletsv:
+        #sampletsv.write('Name\tSampleID\n')
+        for k in map_stringid_to_numberic_id.keys():
+            sampletsv.write(f'{k}\t{map_stringid_to_numberic_id[k]}\n')
+    #gene_info.tsv
+    with open(os.path.join(path_out_pangenome,'gene_info.tsv'), 'w') as genetsv:
+        #genetsv.write('GeneName\tSampleID\tclusterID\n')
+        for k in map_geneid_to_info.keys():
+            # print(k)
+            genetsv.write(k+'@'+map_geneid_to_info[k]['strand']+'\t'+str(map_stringid_to_numberic_id[map_geneid_to_info[k]['sample_id']])+'\t'+str(map_geneid_to_numberic_cid[k])+'\n')
+    with open(os.path.join(path_out_pangenome,'gene_position.tsv'), 'w') as genepos_tsv,  gzip.open(os.path.join(path_out_pangenome,'gene_position.csv.gz'), 'rt') as genepos_csv:
+        lines = genepos_csv.readlines()
+
+        #genepos_tsv.write('SampleID\tContigName\tGeneSequence\n')
+        for line in lines:
+            row=line[:-1].split(',')
+
+            genepos_tsv.write(f'{map_stringid_to_numberic_id[row[0]]}\t{row[1]}\t')
+            str_genes=''
+            for i in range(2,len(row)):
+                str_genes=str_genes+row[i]+'@'+map_geneid_to_info[row[i]]['strand']+';'
+            genepos_tsv.write(str_genes[:-1]+'\n')
+
+def get_node_coverage(node_id):
+    return float(node_id.split('_')[5])
+
+def get_node_length(node_id):
+    return float(node_id.split('_')[3])
+
+def get_value(edge_df0, source_id, target_id):
+    # if source_id in edge_df0['source'].values and target_id in edge_df0['target'].values:
+    #     print(edge_df0[((edge_df0['source'] == source_id) & (edge_df0['target'] == target_id))])
+    # else:
+    #     print('No value')
+    df_res = edge_df0[((edge_df0['source'] == source_id) & (edge_df0['target'] == target_id))]
+    if len(df_res.index) >= 1:
+        print(df_res.iloc[0, 2])
+    else:
+        df_res = edge_df0[((edge_df0['source'] == source_id+'_m0') & (edge_df0['target'] == target_id+'_m0'))]
+        if len(df_res.index) >= 1:
+            print(df_res.iloc[0, 2])
+        else:
+            print("No value")
+# pangraph.edge_df0
+
+def next_node_multi_1(target_contigs_list, idx):
+    ## find the next node of multiplicity 1 after the index: idx
+    current_idx = idx + 1
+    while(get_node_coverage(target_contigs_list[current_idx]) >= 25.0):
+        current_idx += 1
+    return target_contigs_list[current_idx]
+
+def next_node_length(target_contigs_list, idx, threshold=3000):
+    ## find the next node of length >= threshold after the index: idx
+    current_idx = idx + 1
+    while(get_node_length(target_contigs_list[current_idx]) < threshold):
+        current_idx += 1
+    return target_contigs_list[current_idx]
