@@ -19,8 +19,6 @@ def overlap(a, b):
     res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
     turn(res)
 
-
-
 def max_common_subsequence(a, b):
     result = np.zeros((len(a), len(b)))
     n = max(len(a), len(b))
@@ -438,6 +436,17 @@ def get_value(edge_df0, source_id, target_id):
             print("No value")
 # pangraph.edge_df0
 
+def get_value_num(edge_df0, source_id, target_id):
+    df_res = edge_df0[((edge_df0['source'] == source_id) & (edge_df0['target'] == target_id))]
+    if len(df_res.index) >= 1:
+        return (df_res.iloc[0, 2])
+    else:
+        df_res = edge_df0[((edge_df0['source'] == source_id+'_m0') & (edge_df0['target'] == target_id+'_m0'))]
+        if len(df_res.index) >= 1:
+            return (df_res.iloc[0, 2])
+        else:
+            return -1
+
 def next_node_multi_1(target_contigs_list, idx):
     ## find the next node of multiplicity 1 after the index: idx
     current_idx = idx + 1
@@ -451,3 +460,32 @@ def next_node_length(target_contigs_list, idx, threshold=3000):
     while(get_node_length(target_contigs_list[current_idx]) < threshold):
         current_idx += 1
     return target_contigs_list[current_idx]
+
+def top_prev(prev, node):
+    node_temp = prev[node]
+    current_node = None
+    while(node_temp != None):
+        current_node = node_temp
+        node_temp = prev[node_temp]
+    return current_node
+
+def recent_large_prev(prev, node, threshold):
+    while(get_node_length(node) < threshold):
+        node = prev[node]
+        if node == None:
+            return None 
+    return node
+
+def recent_large_after(after, node, threshold):
+    while(get_node_length(node) < threshold):
+        node = after[node]
+        if node == None:
+            return None 
+    return node
+
+def vote_sign(my_list):
+    count = my_list.count('-')
+    if 2*count >= len(my_list):
+        return '-'
+    else:
+        return '+'

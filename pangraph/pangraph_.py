@@ -12,6 +12,7 @@ from .utils import buildOverlapEdge
 from .utils import read_contigs2dict
 from .utils import write_fasta, max_common_subsequence, similarity_sequence
 from .utils import append_strand, append_strand_undirected, append_strand_reverse
+from .utils import top_prev, recent_large_prev, recent_large_after, get_node_length, vote_sign
 
 class PanGraph():
     def __init__(self, sample_info, gene_info, gene_position, grades=None):
@@ -74,6 +75,64 @@ class PanGraph():
         for i in range(len(nodes_coverage)):
             self.node_multiplicity[gene_position_sub.iloc[i,1]] = expected_node_coverage[i]
         # return(self.node_multiplicity)
+
+    def get_pangraph_cost(self, source_id, target_id):
+        ### Compute the cost between two contigs in the pangraph
+        return_val = -1.0
+        # if self.multiplicity_bool:
+        #     source_id = source_id[:-3]
+        #     target_id = target_id[:-3]
+        path_weight_vec = []
+        for tail_gene in self.longtail_contig[source_id]:
+            for head_gene in self.longhead_contig[target_id]:
+                source_id_0 = 'C-' + str(tail_gene)
+                target_id_0 = 'C-' + str(head_gene)  
+                weight_p = 0.0
+                try:
+                    p = nx.shortest_path(self.H, source=source_id_0, target=target_id_0)
+                except NetworkXNoPath:
+                    p = None
+                if p is not None:                               
+                    for node_p_idx in range(len(p)-1):
+                        weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                    if len(p) >= 2:
+                        weight_p = weight_p/float((len(p)-1)*(len(p)-1))
+                        path_weight_vec.append(weight_p)
+        if len(path_weight_vec) > 0:
+            return_val = np.mean(path_weight_vec)
+        return return_val
+
+    def get_value_long_contigs(self, edge_df0,  source_id, target_id):
+        return_val = -1.0
+        df_res = edge_df0[((edge_df0['source'] == source_id) & (edge_df0['target'] == target_id))]
+        if len(df_res.index) >= 1:
+            return_val = float(df_res.iloc[0, 2])
+        if return_val < 0.2*self.n_samples/4.0:
+            print("compute long range dependancy")
+            if self.multiplicity_bool:
+                source_id = source_id[:-3]
+                target_id = target_id[:-3]
+            path_weight_vec = []
+            for tail_gene in self.longtail_contig[source_id]:
+                for head_gene in self.longhead_contig[target_id]:
+                    # print(tail_gene, head_gene)
+                    source_id_0 = 'C-' + str(tail_gene)
+                    target_id_0 = 'C-' + str(head_gene)  
+                    weight_p = 0.0
+                    try:
+                        p = nx.shortest_path(self.H, source=source_id_0, target=target_id_0)
+                    except NetworkXNoPath:
+                        p = None
+                    if p is not None:                               
+                        for node_p_idx in range(len(p)-1):
+                            weight_p += self.H[p[node_p_idx]][p[node_p_idx+1]]['weight']
+                        if len(p) >= 2:
+                            weight_p = 0.05 + weight_p/float((len(p)-1)*(len(p)-1))
+                            path_weight_vec.append(weight_p)
+            if len(path_weight_vec) > 0:
+                return_val = np.mean(path_weight_vec)
+            print(return_val)
+        return return_val
 
     def construct_graph(self, method = "graph_alignment", sample_id_ref = None,  min_nucleotides = 200, min_genes = 1, edge_weight = "unit", target_genome_id=-1):
         """Construct pangenome graph.
@@ -518,7 +577,10 @@ class PanGraph():
         #         weight0.append(weight_vec[i])
         # source_vec = source0; target_vec = target0; weight_vec = weight0
 
-        self.multiplicity_bool = False
+        if self.MLR == 1:
+            self.multiplicity_bool = True
+        else:
+            self.multiplicity_bool = False
         if self.multiplicity_bool:
             print("Implement multiplicity")
             self.compute_multiplicity(self.sample_df) # compute multiplicity for contigs (nodes)
@@ -537,27 +599,64 @@ class PanGraph():
             edge_df = pd.DataFrame({'source': source_vec, 'target':target_vec, 'weight': weight_vec})
             self.edge_df0 = edge_df
             edge_df = edge_df.sort_values(by='weight', ascending=False)
-            self.edge_list = []
-            count = 0
-            # nodes_set = []
-            while(len(edge_df.index) > 0):
-                count += 1
-                source_sol_temp = edge_df.iloc[0,0]
-                target_sol_temp = edge_df.iloc[0,1]
-                # print(source_sol_temp, target_sol_temp, len(edge_df.index))
-                if edge_df.iloc[0,2] >= min_weight:
-                    self.edge_list.append([source_sol_temp, target_sol_temp])
-                    edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
-                    edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
-                    # nodes_set.append(source_sol_temp)
-                    # nodes_set.append(target_sol_temp)
-                    if count > 200000000:
+
+            if self.MLR == 1:
+                nodes_set = set(source_vec + target_vec)
+                prev = {}; after = {};
+                for node in nodes_set:
+                    prev[node] = None 
+                    after[node] = None 
+                self.edge_list = []
+                count = 0
+                self.long_range_dependancy_threshold = 0.04*(self.n_samples - 1) -0.001
+                print("Set long_range_dependancy_threshold = ", self.long_range_dependancy_threshold)
+                while(len(edge_df.index) > 0 and edge_df.iloc[0, 2] >= min_weight):
+                    source_sol_temp = edge_df.iloc[0,0]
+                    target_sol_temp = edge_df.iloc[0,1]
+                    if top_prev(prev, source_sol_temp) != target_sol_temp:
+                        source_id = recent_large_prev(prev, source_sol_temp, 6000)
+                        target_id = recent_large_after(after, target_sol_temp, 6000)
+                        # print(source_sol_temp, source_id, '-->', target_sol_temp, target_id)
+                        break_path = True 
+                        if source_id != None and target_id != None:
+                            if self.get_value_long_contigs(self.edge_df0,  source_id, target_id) < self.long_range_dependancy_threshold:
+                                break_path = False
+                        if break_path:
+                            self.edge_list.append([source_sol_temp, target_sol_temp])
+                            prev[target_sol_temp] = source_sol_temp 
+                            after[source_sol_temp] = target_sol_temp
+                            edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
+                            edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
+                        else:
+                            edge_df = edge_df.iloc[1:,:] ## Remove the first row
+                    else:
+                        edge_df = edge_df.iloc[1:,:] ## Remove the first row
+                        print("remove a node which creates a loop")
+
+                    count += 1
+                    if count > 20000000:
                         break
-                else:
-                    break
+            else:
+                print("NOT long_range_dependancy")
+                self.edge_list = []
+                count = 0
+                while(len(edge_df.index) > 0):
+                    count += 1
+                    source_sol_temp = edge_df.iloc[0,0]
+                    target_sol_temp = edge_df.iloc[0,1]
+                    # print(source_sol_temp, target_sol_temp, len(edge_df.index))
+                    if edge_df.iloc[0,2] >= min_weight:
+                        self.edge_list.append([source_sol_temp, target_sol_temp])
+                        edge_df.drop(edge_df[edge_df.source == source_sol_temp].index, inplace=True)
+                        edge_df.drop(edge_df[edge_df.target == target_sol_temp].index, inplace=True)
+                        if count > 200000000:
+                            break
+                    else:
+                        break
+
         else:
             print("Compute maximum matching")
-            edges = [(source_vec[i] + 't', target_vec[i] + 'h', weight_vec[i]) for i in range(len(source_vec))]
+            edges = [(source_vec[i] + 't', target_vec[i] + 'h', weight_vec[i]) for i in range(len(source_vec)) if weight_vec[i] >= min_weight]
             mm_graph = nx.Graph()
             mm_graph.add_weighted_edges_from(edges)
             # maximum_matching = nx.max_weight_matching(mm_graph)
@@ -574,8 +673,11 @@ class PanGraph():
         self.contig_graph = nx.DiGraph()
         self.contig_graph.add_edges_from(self.edge_list)            
         return self.contig_graph
+
     def remove_cycle(self, assembly_graph):
         cycle_list = list(nx.simple_cycles(self.contig_graph))
+        if len(cycle_list) > 0:
+            print("There is a CYCLE - I will remove it")
         if self.multiplicity_bool:
             for i in range(len(cycle_list)):
                 cycle_i = cycle_list[i]
@@ -593,7 +695,7 @@ class PanGraph():
                         break;
         return self.contig_graph
          
-    def run_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching):
+    def run_pangraph_pipeline(self, data_dir, incomplete_sample_name, assem_dir, fasta_gen, output_dir, maximum_matching, MLR = 1, SInfer = 0, min_weight_val = 1.0):
         contig_dir = assem_dir + '/contigs.fasta'
         ### Read the data
         sample_info = pd.read_csv(data_dir + "/samples.tsv", delimiter='\t', header=None)
@@ -625,26 +727,57 @@ class PanGraph():
             # for l,r in getContigsAdjacency_v2(assem_dir):
                 edge_list_assembly.append((append_strand(l), append_strand(r)))
                 edge_list_assembly.append((append_strand_reverse(r), append_strand_reverse(l)))
+
         self.gene = read_contigs2dict(contig_dir)
-
-        # if self.multiplicity_bool:
-        #     new_gene = {}
-        #     for key in self.gene:
-        #         for i in self.node_multiplicity[key]:
-        #             new_gene[key + '_m'+str(i)] = self.gene[key]
-        #     self.gene = new_gene
-
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
+        # print("Use union graph: overlap + assembly: NO")
         edge_list_overlap = buildOverlapEdge(self.gene, 20, 'directed')
-        print("Use union graph: overlap + assembly")
+        print("Use union graph: overlap + assembly: done")
         edge_list_final = edge_list_overlap + edge_list_assembly
-        # edge_list_final = edge_list_assembly
+        # edge_list_final = edge_list_overlap
         assembly_graph= nx.DiGraph()
         assembly_graph.add_edges_from(edge_list_final)
         self.assembly_graph = assembly_graph
+
+        if SInfer:
+            print("Re-infer the contigs strand: YES")
+            self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==incomplete_sample_id]
+            self.contigset_list = list(self.sample_df.iloc[:,1])
+            small_contigs = [cg for cg in self.contigset_list if get_node_length(cg) <= 8000]
+            contigstrand_dict = {}
+            for ct in small_contigs:
+                contigstrand_dict[ct] = []
+            des_dist = 2
+            for ctg in self.contigset_list:
+                if get_node_length(ctg) > 15000 and assembly_graph.has_node(ctg+self.strand[ctg]):
+                    for node in nx.descendants_at_distance(assembly_graph, ctg + self.strand[ctg], des_dist):
+                        if node[:-1] in small_contigs:
+                            contigstrand_dict[node[:-1]].append(node[-1])
+                    reverse_sign = '+' if self.strand[ctg]=='-' else '-'
+                    for node in nx.descendants_at_distance(assembly_graph, ctg + reverse_sign, des_dist):
+                        if node[:-1] in small_contigs:
+                            contigstrand_dict[node[:-1]].append(node[-1])
+            n_infer_contigs = 0
+            # self.contigstrand_dict = contigstrand_dict
+            for key in contigstrand_dict:
+                if len(contigstrand_dict[key]) > 0:
+                    n_infer_contigs += 1
+                    self.strand[key] = vote_sign(contigstrand_dict[key])
+            print("Number of sign-infered contigs: ", n_infer_contigs)
+        else:
+            print("Re-infer the contigs strand: NO")
+
         params = {'method': 'weight_path_assembly_v2', 'assembly_graph': assembly_graph, 'max_length': 5, 'maximum_matching': maximum_matching, 'graph':'directed', 'max_length_nucleotides': 8000, 'weighted_CG': self.weighted_CG}
-        print("Please set min_weight back to 1.0")
-        self.min_weight = 1.0
+        self.min_weight = min_weight_val
+        self.MLR = MLR
         contig_graph = self.join_contig(sample_id=incomplete_sample_id, min_weight=self.min_weight, params=params)
+        # print("DO NOT REMOVE CIRCLE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print("DO NOT REMOVE CIRCLE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         contig_graph = self.remove_cycle(assembly_graph)
         indegree_dict = dict(contig_graph.in_degree())
         adj_list = {}
@@ -660,7 +793,7 @@ class PanGraph():
                         adj_list[source_node_key].append(next_neighbor_temp)
                     else:
                         break;
-        
+
         if self.multiplicity_bool:
             adj_list_v2 = {}
             for key in adj_list:
