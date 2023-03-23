@@ -34,10 +34,7 @@ in our paper are available at GitHub: https://github.com/....
 License
 -------
 
-The JVis package is 3-clause BSD licensed.
-
-Jvis package is inherited from scikit-learn and UMAP
-package under 3-clause BSD license.
+The Pasa package is 3-clause BSD licensed.
 
 This code was tested on 
 Python 3.6, 3.7; numpy version 1.19.2; scipy version 1.5.3; numba version 0.52.0 
