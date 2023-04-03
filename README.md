@@ -20,6 +20,7 @@ Requirements:
 * scipy
 * numba
 * Panta
+* networkx
 
 ---------------
 How to use Pasa
