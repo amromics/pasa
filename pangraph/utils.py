@@ -9,15 +9,15 @@ import pandas as pd
 import gzip
 
 def help_fnc(i, j):
-    for ele in range(min(500,len(j)), -1, -1):
+    for ele in range(min(400,len(j)), -1, -1):
         if i.endswith(j[:ele]):
-            print(ele, end =":")
+            # print(ele, end =":")
             return j[ele:]
         
 def overlap(a, b):
     test_list = [a, b]
     res = ''.join(help_fnc(i, j) for i, j in zip([''] + test_list, test_list))
-    turn(res)
+    return(res)
 
 def max_common_subsequence(a, b):
     result = np.zeros((len(a), len(b)))
@@ -318,13 +318,14 @@ def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
                 for i in range(len(path)):
                     next_neighbor_temp = path[i][:-1]
                     strand = path[i][-1]
-                    if strand == '+':
-                        # print(source_node_key)
-                        gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
-                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
-                    else:
-                        gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
-                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
+                    if next_neighbor_temp in gene:
+                        if strand == '+':
+                            # print(source_node_key)
+                            # gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
+                            gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
+                        else:
+                            # gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
+                            gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
     elif option=='all':
         # ## Keep all contigs
         gene_origin = gene.copy()
@@ -345,11 +346,11 @@ def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
                     strand = path[i][-1]
                     if strand == '+':
                         # print(source_node_key)
-                        gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
-                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
+                        # gene_origin[source_node_key] = gene_origin[source_node_key]+gene[next_neighbor_temp]
+                        gene_origin[source_node_key] = overlap(gene_origin[source_node_key], gene[next_neighbor_temp])
                     else:
-                        gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
-                        # gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
+                        # gene_origin[source_node_key] = gene_origin[source_node_key]+reverse_complement(gene[next_neighbor_temp])
+                        gene_origin[source_node_key] = overlap(gene_origin[source_node_key], reverse_complement(gene[next_neighbor_temp]))
                     if next_neighbor_temp in gene_origin:
                         del gene_origin[next_neighbor_temp]
                         
@@ -360,6 +361,7 @@ def generate_fasta_from_dict(gene, adj_list_assembly, option='partial'):
 
 
 def export_metadata(path_out_pangenome):
+    # print("Hello VN")
     dict_samples=json.load(open(os.path.join(path_out_pangenome,'samples.json')))
     #print(dict_samples)
     map_stringid_to_numberic_id={}
@@ -381,7 +383,7 @@ def export_metadata(path_out_pangenome):
         #map_stringid_to_numberic_id[dict_samples[i]['id']]=i
     # print(map_geneid_to_numberic_cid)
     #map gene to strain
-    df_annotations= pd.read_csv(os.path.join(path_out_pangenome,'gene_annotation.csv.gz'))
+    df_annotations= pd.read_csv(os.path.join(path_out_pangenome,'gene_annotation.csv'))
     # print(df_annotations.head())
     map_geneid_to_info={}
     for index, row  in df_annotations.iterrows():
@@ -399,11 +401,14 @@ def export_metadata(path_out_pangenome):
     with open(os.path.join(path_out_pangenome,'gene_info.tsv'), 'w') as genetsv:
         #genetsv.write('GeneName\tSampleID\tclusterID\n')
         for k in map_geneid_to_info.keys():
-            # print(k)
+            # print(k, map_geneid_to_info[k]['strand'])
+            # print(str(map_stringid_to_numberic_id[map_geneid_to_info[k]['sample_id']]))
+            # print("l", map_geneid_to_numberic_cid[k])
             genetsv.write(k+'@'+map_geneid_to_info[k]['strand']+'\t'+str(map_stringid_to_numberic_id[map_geneid_to_info[k]['sample_id']])+'\t'+str(map_geneid_to_numberic_cid[k])+'\n')
-    with open(os.path.join(path_out_pangenome,'gene_position.tsv'), 'w') as genepos_tsv,  gzip.open(os.path.join(path_out_pangenome,'gene_position.csv.gz'), 'rt') as genepos_csv:
+            
+    # with open(os.path.join(path_out_pangenome,'gene_position.tsv'), 'w') as genepos_tsv,  gzip.open(os.path.join(path_out_pangenome,'gene_position.csv'), 'rt') as genepos_csv:
+    with open(os.path.join(path_out_pangenome,'gene_position.tsv'), 'w') as genepos_tsv,  open(os.path.join(path_out_pangenome,'gene_position.csv'), 'rt') as genepos_csv:
         lines = genepos_csv.readlines()
-
         #genepos_tsv.write('SampleID\tContigName\tGeneSequence\n')
         for line in lines:
             row=line[:-1].split(',')

@@ -60,6 +60,8 @@ class PanGraph():
 
     def get_node_coverage(self, node_id):
         return(float(node_id.split("_")[5]))
+    def get_multiplicity(self, node_id):
+        return(round(float(node_id.split("_")[5][:-1])/self.basecoverage))
 
     def compute_multiplicity(self, sample_df):
         gene_position_sub = sample_df.copy()
@@ -101,7 +103,39 @@ class PanGraph():
         if len(path_weight_vec) > 0:
             return_val = np.mean(path_weight_vec)
         return return_val
-
+    
+    def remove_unsupported_pangraph(self, adj_list_assembly):
+        ### Disconnect the path if the two nodes does not support by a pangraph
+        print("Refine the scaffolds")
+        adj_list_assembly_new = {}
+        for key in adj_list_assembly:
+            path = adj_list_assembly[key]
+            L = []
+            for i in range(len(path)):
+                if self.get_multiplicity(path[i])<=1 and (path[i][:-1] in self.head_contig) and (get_node_length(path[i])>1000):
+                    L.append(i)
+            break_point = []
+            for i in range(len(L)-1):
+                if self.get_pangraph_cost(path[L[i]][:-1], path[L[i+1]][:-1]) <= 3.0:
+                    break_point.append(L[i])
+            start = 0
+            for bp in break_point:
+                new_path = []
+                for j in range(start, bp+1):
+                    new_path.append(path[j])
+                adj_list_assembly_new[key + path[start]] = new_path
+                start = bp+1 
+            new_path = []
+            if start > 0:
+                for j in range(break_point[-1]+1, len(path)):
+                    new_path.append(path[j])
+            else:
+                for j in range(len(path)):
+                    new_path.append(path[j])
+            if len(new_path) > 0:
+                adj_list_assembly_new[key+'_last'] = new_path
+        return(adj_list_assembly_new)
+                
     def get_value_long_contigs(self, edge_df0,  source_id, target_id):
         return_val = -1.0
         df_res = edge_df0[((edge_df0['source'] == source_id) & (edge_df0['target'] == target_id))]
@@ -745,30 +779,53 @@ class PanGraph():
         self.assembly_graph = assembly_graph
 
         if SInfer:
-            print("Re-infer the contigs strand: YES")
-            self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==incomplete_sample_id]
-            self.contigset_list = list(self.sample_df.iloc[:,1])
-            small_contigs = [cg for cg in self.contigset_list if get_node_length(cg) <= 8000]
-            contigstrand_dict = {}
-            for ct in small_contigs:
-                contigstrand_dict[ct] = []
-            des_dist = 2
-            for ctg in self.contigset_list:
-                if get_node_length(ctg) > 15000 and assembly_graph.has_node(ctg+self.strand[ctg]):
-                    for node in nx.descendants_at_distance(assembly_graph, ctg + self.strand[ctg], des_dist):
-                        if node[:-1] in small_contigs:
-                            contigstrand_dict[node[:-1]].append(node[-1])
-                    reverse_sign = '+' if self.strand[ctg]=='-' else '-'
-                    for node in nx.descendants_at_distance(assembly_graph, ctg + reverse_sign, des_dist):
-                        if node[:-1] in small_contigs:
-                            contigstrand_dict[node[:-1]].append(node[-1])
-            n_infer_contigs = 0
-            # self.contigstrand_dict = contigstrand_dict
-            for key in contigstrand_dict:
-                if len(contigstrand_dict[key]) > 0:
-                    n_infer_contigs += 1
-                    self.strand[key] = vote_sign(contigstrand_dict[key])
-            print("Number of sign-infered contigs: ", n_infer_contigs)
+            if 0:
+                print("Re-infer the contigs strand: YES")
+                self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==incomplete_sample_id]
+                self.contigset_list = list(self.sample_df.iloc[:,1])
+                small_contigs = [cg for cg in self.contigset_list if get_node_length(cg) <= 8000]
+                contigstrand_dict = {}
+                for ct in small_contigs:
+                    contigstrand_dict[ct] = []
+                des_dist = 2
+                for ctg in self.contigset_list:
+                    if get_node_length(ctg) > 15000 and assembly_graph.has_node(ctg+self.strand[ctg]):
+                        for node in nx.descendants_at_distance(assembly_graph, ctg + self.strand[ctg], des_dist):
+                            if node[:-1] in small_contigs:
+                                contigstrand_dict[node[:-1]].append(node[-1])
+                        reverse_sign = '+' if self.strand[ctg]=='-' else '-'
+                        for node in nx.descendants_at_distance(assembly_graph, ctg + reverse_sign, des_dist):
+                            if node[:-1] in small_contigs:
+                                contigstrand_dict[node[:-1]].append(node[-1])
+                n_infer_contigs = 0
+                # self.contigstrand_dict = contigstrand_dict
+                for key in contigstrand_dict:
+                    if len(contigstrand_dict[key]) > 0:
+                        n_infer_contigs += 1
+                        self.strand[key] = vote_sign(contigstrand_dict[key])
+                print("Number of sign-infered contigs: ", n_infer_contigs)
+            else:
+                print("Re-infer the contigs strand: YES")
+                print("Using gene strand information")
+                n_infer_contigs = 0
+                self.sample_df = self.gene_position.loc[self.gene_position["SampleID"]==incomplete_sample_id]
+                for idx_l in range(len(self.sample_df.index)):
+                    contig_name__ = self.sample_df.iloc[idx_l, 1]
+                    if get_node_length(contig_name__) <= 15000:
+                        n_infer_contigs = n_infer_contigs + 1
+                        gene_set_sign = self.sample_df.iloc[idx_l, 1].split(';')
+                        count_neg = 0
+                        for genes in gene_set_sign:
+                            if genes[-2:]=='-1':
+                                count_neg = count_neg + 1
+                        if 2*count_neg > len(gene_set_sign):
+                            self.strand[contig_name__] = '-'
+                        else:
+                            self.strand[contig_name__] = '+'
+                
+                print("Number of sign-infered contigs: ", n_infer_contigs)
+            
+            
         else:
             print("Re-infer the contigs strand: NO")
 
@@ -838,6 +895,22 @@ class PanGraph():
                 adj_list_assembly[key] = self.remove_duplicate(path2)
 
         # gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, 'all')
+        if self.MLR == 1:
+            ### Compute base coverage
+            print("compute base coverage")
+            gene_position_sub = self.sample_df.copy()
+            nodes_list = list(gene_position_sub.iloc[:,1].values)
+            nodes_len = [int(node.split("_")[3]) for node in nodes_list]
+            nodes_coverage = [float(node.split("_")[5]) for node in nodes_list]
+            gene_position_sub['length'] = nodes_len
+            gene_position_sub['coverage'] = nodes_coverage
+            gene_position_sub = gene_position_sub.sort_values(by='length', ascending=False)
+            self.basecoverage = np.median(gene_position_sub['coverage'][:5])
+            ## refinement
+            # print("Refining the scaffolds")
+            adj_list_assembly_n = self.remove_unsupported_pangraph(adj_list_assembly)
+            adj_list_assembly = adj_list_assembly_n
+            
         self.adj_list_assembly = adj_list_assembly
         gene_origin = generate_fasta_from_dict(self.gene, adj_list_assembly, fasta_gen)
         write_fasta(gene_origin, output_dir)
