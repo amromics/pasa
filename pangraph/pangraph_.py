@@ -108,6 +108,7 @@ class PanGraph():
         ### Disconnect the path if the two nodes does not support by a pangraph
         print("Refine the scaffolds")
         adj_list_assembly_new = {}
+        contig_id = 0
         for key in adj_list_assembly:
             path = adj_list_assembly[key]
             L = []
@@ -123,7 +124,10 @@ class PanGraph():
                 new_path = []
                 for j in range(start, bp+1):
                     new_path.append(path[j])
-                adj_list_assembly_new[key + path[start]] = new_path
+                if (j+1 < len(path)) and self.get_multiplicity(path[j+1]) >= 6:
+                    new_path.append(path[j+1])
+                adj_list_assembly_new[key[:-6] + '_c'+str(contig_id)] = new_path
+                contig_id = contig_id + 1
                 start = bp+1 
             new_path = []
             if start > 0:
@@ -133,7 +137,8 @@ class PanGraph():
                 for j in range(len(path)):
                     new_path.append(path[j])
             if len(new_path) > 0:
-                adj_list_assembly_new[key+'_last'] = new_path
+                adj_list_assembly_new[key[:-6] + '_c'+str(contig_id)] = new_path
+                contig_id = contig_id + 1
         return(adj_list_assembly_new)
                 
     def get_value_long_contigs(self, edge_df0,  source_id, target_id):
@@ -380,7 +385,7 @@ class PanGraph():
         adj_matrix = csr_matrix((np.array(weight_contig), (rows, cols)), shape=(self.n_clusters, self.n_clusters))
         print("Clip the matrix 0.2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         # adj_matrix = adj_matrix>=10 #version 1: quite good.
-        adj_matrix = adj_matrix.multiply(adj_matrix>=0.2*self.n_samples)
+        adj_matrix = adj_matrix.multiply(adj_matrix>=0.1*self.n_samples)
         self.H = nx.from_numpy_matrix(adj_matrix, create_using=nx.DiGraph)
         ## add node info
         mapping = {i: "C-" + str(i) for i in range(self.n_clusters)}
@@ -894,19 +899,39 @@ class PanGraph():
             if len(path2) > 0:
                 adj_list_assembly[key] = self.remove_duplicate(path2)
 
+        ## Remove contigs of more than multiplicity.
+        print("Remove contigs of more than multiplicity")
+        count_multiplicity = {}
+        # Initialize the count_multiplicity
+        for key in adj_list_assembly:
+            for elem in adj_list_assembly[key]:
+                count_multiplicity[elem[:-1]] = 0
+        ### Compute base coverage
+        print("compute base coverage")
+        gene_position_sub = self.sample_df.copy()
+        nodes_list = list(gene_position_sub.iloc[:,1].values)
+        nodes_len = [int(node.split("_")[3]) for node in nodes_list]
+        nodes_coverage = [float(node.split("_")[5]) for node in nodes_list]
+        gene_position_sub['length'] = nodes_len
+        gene_position_sub['coverage'] = nodes_coverage
+        gene_position_sub = gene_position_sub.sort_values(by='length', ascending=False)
+        self.basecoverage = np.median(gene_position_sub['coverage'][:5])
+        # recompute the adj_list_assembly
+        key_list = [key for key in adj_list_assembly]
+        key_list.reverse()
+        for key in key_list:
+            path1 = []
+            path2 = []
+            for elem in adj_list_assembly[key]:
+                if (elem[:-1] not in path1) and count_multiplicity[elem[:-1]] < self.get_multiplicity(elem):
+                    path1.append(elem[:-1])
+                    path2.append(elem)
+                    count_multiplicity[elem[:-1]] = count_multiplicity[elem[:-1]] + 1
+            adj_list_assembly[key] = path2
+            
         # gene_origin = generate_fasta_from_dict(gene, adj_list_assembly, 'all')
         if self.MLR == 1:
-            ### Compute base coverage
-            print("compute base coverage")
-            gene_position_sub = self.sample_df.copy()
-            nodes_list = list(gene_position_sub.iloc[:,1].values)
-            nodes_len = [int(node.split("_")[3]) for node in nodes_list]
-            nodes_coverage = [float(node.split("_")[5]) for node in nodes_list]
-            gene_position_sub['length'] = nodes_len
-            gene_position_sub['coverage'] = nodes_coverage
-            gene_position_sub = gene_position_sub.sort_values(by='length', ascending=False)
-            self.basecoverage = np.median(gene_position_sub['coverage'][:5])
-            ## refinement
+        # if 0:
             # print("Refining the scaffolds")
             adj_list_assembly_n = self.remove_unsupported_pangraph(adj_list_assembly)
             adj_list_assembly = adj_list_assembly_n

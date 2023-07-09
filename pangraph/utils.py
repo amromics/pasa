@@ -9,10 +9,14 @@ import pandas as pd
 import gzip
 
 def help_fnc(i, j):
-    for ele in range(min(400,len(j)), -1, -1):
+    nonmatch = True
+    for ele in range(min(127,len(j)), 63, -1):
         if i.endswith(j[:ele]):
             # print(ele, end =":")
+            nonmatch = False
             return j[ele:]
+    if nonmatch:
+        return j
         
 def overlap(a, b):
     test_list = [a, b]
