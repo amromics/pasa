@@ -19,9 +19,7 @@ Requirements:
 * numpy
 * scipy
 * numba
-* Panta
-* networkx
-
+* Panta: https://github.com/vanhoan310/Pasa_Panta
 ---------------
 How to use Pasa
 ---------------
